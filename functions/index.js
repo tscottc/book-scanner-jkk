@@ -1,9 +1,10 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {GoogleGenerativeAI} = require("@google/generative-ai");
+const {GEMINI_API_KEY} = require("./config");
 
 // This is the new, correct way to get the key
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Initialize the AI client right after getting the key
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
