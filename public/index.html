@@ -16,13 +16,64 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f5f5f5;
-            padding: 16px;
+            padding: 0;
             padding-bottom: 80px;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-container {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            padding: 0;
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 16px;
+            text-align: center;
+            text-decoration: none;
+            color: #666;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            background: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .nav-tab:hover {
+            background: #f8f9fa;
+            color: #007AFF;
+        }
+
+        .nav-tab.active {
+            color: #007AFF;
+            border-bottom-color: #007AFF;
+        }
+
+        .nav-tab:disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .nav-tab:disabled:hover {
+            background: white;
+            color: #ccc;
         }
 
         .container {
             max-width: 600px;
             margin: 0 auto;
+            padding: 16px;
         }
 
         .header {
@@ -331,6 +382,13 @@
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="https://www.midwestattic.com/#/employee" class="nav-tab">Employee Page</a>
+            <button class="nav-tab active" disabled>Book Scanner</button>
+        </div>
+    </nav>
+
     <div class="container">
         <div class="header">
             <h1>📚 Book Scanner</h1>
