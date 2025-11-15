@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book Scanner</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         * {
@@ -142,6 +143,27 @@
             width: 100%;
             border-radius: 8px;
             overflow: hidden;
+            position: relative;
+        }
+
+        #reader video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #reader canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #reader canvas.drawingBuffer {
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         .search-container {
@@ -244,6 +266,37 @@
         .location-item.primary {
             background: #e8f5e9;
             border-left-color: #2e7d32;
+        }
+
+        .location-item.ai-result {
+            background: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+        }
+
+        .location-item.keyword-result {
+            background: #fff3e0;
+            border-left: 4px solid #f57c00;
+        }
+
+        .method-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        .badge-ai {
+            background: #1976d2;
+            color: white;
+        }
+
+        .badge-keyword {
+            background: #f57c00;
+            color: white;
         }
 
         .location-subject {
@@ -428,6 +481,12 @@
         let scanner = null;
         let directory = [];
         let currentBook = null;
+        let lastScannedCode = null;
+        let scanInProgress = false;
+
+        // Cloud Function configuration
+        const CLOUD_FUNCTION_URL = 'https://getbooktopic-pom3tqjr6a-uc.a.run.app';
+        const USE_AI_CLASSIFICATION = true; // AI classification enabled! 🎉
 
         // Load and parse CSV directory on page load
         async function loadDirectory() {
@@ -462,35 +521,80 @@
             document.getElementById('search-container').style.display = 'none';
             document.getElementById('results').innerHTML = '';
 
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
-            };
+            // Reset scan state
+            scanInProgress = false;
+            lastScannedCode = null;
 
-            scanner = new Html5Qrcode("reader");
-            scanner.start(
-                { facingMode: "environment" },
-                config,
-                (decodedText) => {
-                    stopScanner();
-                    searchByISBN(decodedText);
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#reader'),
+                    constraints: {
+                        facingMode: "environment"
+                    },
                 },
-                (error) => {
-                    // Silent - scanning errors are expected
+                decoder: {
+                    readers: [
+                        "ean_reader",      // EAN-13 (most common for ISBN)
+                        "ean_8_reader",    // EAN-8
+                        "upc_reader",      // UPC-A
+                        "upc_e_reader"     // UPC-E
+                    ]
+                },
+                locate: true,
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
                 }
-            ).catch((err) => {
-                showError('Unable to start camera. Please check permissions.');
-                stopScanner();
+            }, function(err) {
+                if (err) {
+                    console.error('Quagga init error:', err);
+                    showError('Unable to start camera. Please check permissions.');
+                    stopScanner();
+                    return;
+                }
+
+                scanner = true; // Mark scanner as active
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                if (result && result.codeResult && result.codeResult.code) {
+                    const code = result.codeResult.code;
+                    const format = result.codeResult.format;
+
+                    // Prevent duplicate scans and require minimum confidence
+                    if (scanInProgress || code === lastScannedCode) {
+                        return;
+                    }
+
+                    // Only accept barcodes that are likely ISBNs (10 or 13 digits)
+                    const cleanCode = code.replace(/[^0-9]/g, '');
+                    if (cleanCode.length !== 10 && cleanCode.length !== 13) {
+                        console.log('Ignoring barcode (wrong length):', code, 'Length:', cleanCode.length);
+                        return;
+                    }
+
+                    console.log('Detected barcode:', code, 'Format:', format);
+                    scanInProgress = true;
+                    lastScannedCode = code;
+
+                    // Show what was detected to user
+                    showStatus(`Detected ${format}: ${code}`);
+
+                    stopScanner();
+                    searchByISBN(code);
+                }
             });
         }
 
         function stopScanner() {
             if (scanner) {
-                scanner.stop().then(() => {
-                    scanner = null;
-                    document.getElementById('scanner-container').style.display = 'none';
-                }).catch(err => console.error(err));
+                Quagga.stop();
+                Quagga.offDetected();
+                scanner = null;
+                document.getElementById('scanner-container').style.display = 'none';
             }
         }
 
@@ -541,21 +645,48 @@
 
             try {
                 const cleanISBN = isbn.replace(/[^0-9X]/gi, '');
-                const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
-                const data = await response.json();
+                console.log('Cleaned ISBN:', cleanISBN);
+
+                // Try multiple search strategies
+                let data = null;
+
+                // Strategy 1: Direct ISBN search with the full number
+                console.log('Trying direct ISBN search:', cleanISBN);
+                let response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
+                data = await response.json();
+
+                // Strategy 2: If EAN-13 starting with 978/979, also try without the prefix
+                if ((!data.items || data.items.length === 0) && cleanISBN.length === 13 && (cleanISBN.startsWith('978') || cleanISBN.startsWith('979'))) {
+                    const isbn10 = cleanISBN.substring(3, 12); // Remove 978/979 prefix and check digit
+                    console.log('Trying ISBN-10 conversion:', isbn10);
+                    response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}`);
+                    data = await response.json();
+                }
+
+                // Strategy 3: Try searching by just the code as a general query
+                if (!data.items || data.items.length === 0) {
+                    console.log('Trying general search:', cleanISBN);
+                    response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${cleanISBN}`);
+                    data = await response.json();
+                }
 
                 hideStatus();
 
                 if (!data.items || data.items.length === 0) {
-                    showError('Book not found. Try manual search.');
+                    showError(`Book not found for barcode: ${cleanISBN}. Try manual search or scan a different barcode.`);
+                    console.log('No results found for:', cleanISBN);
+                    scanInProgress = false; // Reset flag
                     return;
                 }
 
+                console.log('Found book:', data.items[0].volumeInfo.title);
                 displayBook(data.items[0]);
+                scanInProgress = false; // Reset flag
             } catch (error) {
                 hideStatus();
                 showError('Lookup failed. Please check your connection.');
                 console.error('ISBN lookup error:', error);
+                scanInProgress = false; // Reset flag
             }
         }
 
@@ -589,7 +720,7 @@
             document.getElementById('results-modal').classList.remove('active');
         }
 
-        function displayBook(bookData) {
+        async function displayBook(bookData) {
             const info = bookData.volumeInfo;
             const isbn = (info.industryIdentifiers || []).find(id => id.type.includes('ISBN'))?.identifier || 'N/A';
 
@@ -601,9 +732,89 @@
                 isbn: isbn
             };
 
-            const matches = findMatches(currentBook.description, currentBook.categories.join(' '));
+            // Show loading state
+            showStatus('Analyzing book with AI...');
 
-            const highlightedDesc = highlightKeywords(currentBook.description, matches);
+            // Try AI classification first if enabled
+            let aiMatch = null;
+            let usedAI = false;
+
+            if (USE_AI_CLASSIFICATION && currentBook.description && currentBook.description !== 'No description available.') {
+                try {
+                    aiMatch = await classifyBookWithAI(currentBook.title, currentBook.description);
+                    if (aiMatch) {
+                        usedAI = true;
+                        hideStatus();
+                    }
+                } catch (error) {
+                    console.warn('AI classification failed, falling back to keyword matching:', error);
+                    hideStatus();
+                }
+            } else {
+                hideStatus();
+            }
+
+            // Fall back to keyword matching if AI didn't work
+            const keywordMatches = findMatches(currentBook.description, currentBook.categories.join(' '));
+
+            const highlightedDesc = highlightKeywords(currentBook.description, keywordMatches);
+
+            // Determine which location to show
+            let locationsHTML = '';
+            if (aiMatch) {
+                // ALWAYS show BOTH AI and keyword results for comparison
+                console.log('🤖 AI Classification:', aiMatch.subject);
+                console.log('📋 Top Keyword Matches:', keywordMatches.slice(0, 3).map(m => m.subject));
+
+                locationsHTML = `
+                    <div class="locations">
+                        <div class="locations-title">🤖 AI Classification <span class="method-badge badge-ai">Gemini AI</span></div>
+                        <div class="location-item ai-result">
+                            <div class="location-subject">🎯 ${aiMatch.subject}</div>
+                            <div class="location-detail">Floor ${aiMatch.floor}${aiMatch.aisle ? ', Aisle ' + aiMatch.aisle : ''}${aiMatch.room ? ', ' + aiMatch.room : ''}</div>
+                            <div class="location-matches">Analyzed by Google Gemini AI</div>
+                        </div>
+
+                        ${keywordMatches.length > 0 ? `
+                            <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e0e0e0;">
+                                <div class="locations-title">📋 Keyword Matching Results <span class="method-badge badge-keyword">Keywords</span></div>
+                                <div style="font-size: 13px; color: #666; margin-bottom: 8px;">Compare these traditional keyword matches to the AI result above</div>
+                                ${keywordMatches.slice(0, 3).map((match, index) => `
+                                    <div class="location-item keyword-result">
+                                        <div class="location-subject">${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'} ${match.subject}</div>
+                                        <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
+                                        <div class="location-matches">Matched keywords: ${match.matched_keywords.slice(0, 3).join(', ')}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid #e0e0e0;">
+                                <div class="locations-title">📋 Keyword Matching Results <span class="method-badge badge-keyword">Keywords</span></div>
+                                <div style="font-size: 13px; color: #999; font-style: italic;">No keyword matches found</div>
+                            </div>
+                        `}
+                    </div>
+                `;
+            } else if (keywordMatches.length > 0) {
+                // AI failed/disabled - show keyword matches only
+                console.log('📋 Keyword-only results (AI not available):', keywordMatches.slice(0, 4).map(m => m.subject));
+                locationsHTML = `
+                    <div class="locations">
+                        <div class="locations-title">📍 Suggested Locations <span class="method-badge badge-keyword">Keywords Only</span></div>
+                        <div style="font-size: 13px; color: #666; margin-bottom: 8px;">AI classification unavailable - using keyword matching</div>
+                        ${keywordMatches.slice(0, 4).map((match, index) => `
+                            <div class="location-item keyword-result ${index === 0 ? 'primary' : ''}">
+                                <div class="location-subject">${index === 0 ? '🎯' : '📌'} ${match.subject}</div>
+                                <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
+                                <div class="location-matches">Matched: ${match.matched_keywords.slice(0, 3).join(', ')}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                console.warn('⚠️ No AI or keyword matches found');
+                locationsHTML = '<div class="locations"><div class="error">No matching categories found. Please categorize manually.</div></div>';
+            }
 
             const resultsHTML = `
                 <div class="result-card">
@@ -616,18 +827,7 @@
                     </div>
                     ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">▼ Show more</button>' : ''}
 
-                    ${matches.length > 0 ? `
-                        <div class="locations">
-                            <div class="locations-title">📍 Suggested Locations:</div>
-                            ${matches.slice(0, 4).map((match, index) => `
-                                <div class="location-item ${index === 0 ? 'primary' : ''}">
-                                    <div class="location-subject">${index === 0 ? '🎯' : '📌'} ${match.subject}</div>
-                                    <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
-                                    <div class="location-matches">Matched: ${match.matched_keywords.slice(0, 3).join(', ')}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : '<div class="locations"><div class="error">No matching categories found. Please categorize manually.</div></div>'}
+                    ${locationsHTML}
 
                     <div class="price-section">
                         <a href="https://www.amazon.com/s?k=${encodeURIComponent(currentBook.isbn)}&i=stripbooks" target="_blank" class="price-btn">
@@ -638,6 +838,63 @@
             `;
 
             document.getElementById('results').innerHTML = resultsHTML;
+        }
+
+        /**
+         * Calls the Cloud Function to classify the book using AI
+         * @param {string} title - The book title
+         * @param {string} description - The book description
+         * @return {Promise<object|null>} The matched directory entry or null
+         */
+        async function classifyBookWithAI(title, description) {
+            try {
+                // Extract just the subject names from directory
+                const subjects = directory.map(entry => entry.subject);
+
+                console.log('🚀 Calling AI with:', {
+                    title: title,
+                    descriptionLength: description.length,
+                    availableSubjects: subjects.length
+                });
+
+                const response = await fetch(CLOUD_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        description: description,
+                        subjects: subjects
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    if (errorData.useFallback) {
+                        // Cloud Function explicitly told us to use fallback
+                        return null;
+                    }
+                    throw new Error(`Cloud Function error: ${errorData.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // Find the full directory entry for the classified subject
+                const match = directory.find(entry => entry.subject === data.subject);
+
+                if (match) {
+                    console.log(`✅ AI classified book as: "${data.subject}"`);
+                    console.log('📍 Location:', `Floor ${match.floor}, Aisle ${match.aisle || 'N/A'}, ${match.room || 'N/A'}`);
+                    return match;
+                } else {
+                    console.warn(`⚠️ AI returned subject "${data.subject}" not found in directory`);
+                    return null;
+                }
+            } catch (error) {
+                console.error('AI classification error:', error);
+                throw error;
+            }
         }
 
         function findMatches(description, categories) {
