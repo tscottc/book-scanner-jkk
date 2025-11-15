@@ -16,8 +16,8 @@ let genAI = null;
 // ===================================
 // Constants
 // ===================================
-// Use gemini-2.0-flash (verified working model from API)
-const MODEL_NAME = "gemini-2.0-flash-exp";
+// Use gemini-1.5-flash - stable model with generous free tier (15 RPM, 1M TPM)
+const MODEL_NAME = "gemini-1.5-flash";
 const MAX_RETRIES = 2;
 const TIMEOUT_MS = 15000;
 
