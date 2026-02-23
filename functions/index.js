@@ -5,7 +5,7 @@
 
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
-const {GoogleGenerativeAI} = require("@google/generative-ai");
+const {GoogleGenAI} = require("@google/genai");
 
 // ===================================
 // Configuration
@@ -16,8 +16,8 @@ let genAI = null;
 // ===================================
 // Constants
 // ===================================
-// Use gemini-1.5-flash - stable model with generous free tier (15 RPM, 1M TPM)
-const MODEL_NAME = "gemini-1.5-flash";
+// Use gemini-2.5-flash - latest stable model with generous free tier
+const MODEL_NAME = "gemini-2.5-flash";
 const MAX_RETRIES = 2;
 const TIMEOUT_MS = 15000;
 
@@ -66,11 +66,7 @@ function validateRequestBody(body) {
  * @return {string} The generated prompt for AI classification
  */
 function generatePrompt(title, description, subjects) {
-  // Limit subjects list in prompt to avoid token limits
-  const maxSubjects = 500;
-  const subjectsList = subjects.slice(0, maxSubjects).join(", ");
-  const remaining = subjects.length > maxSubjects ?
-    ` (and ${subjects.length - maxSubjects} more)` : "";
+  const subjectsList = subjects.join(", ");
 
   return `You are a library book classification expert. Your job is to ` +
     `match books to the correct library shelf subject category.
@@ -85,7 +81,7 @@ CRITICAL INSTRUCTIONS:
     `(case-sensitive)
 
 AVAILABLE SUBJECTS:
-${subjectsList}${remaining}
+${subjectsList}
 
 BOOK TO CLASSIFY:
 Title: ${title}
@@ -108,7 +104,6 @@ async function analyzeBookWithRetry(
     subjects,
     retries = MAX_RETRIES,
 ) {
-  const model = genAI.getGenerativeModel({model: MODEL_NAME});
   const prompt = generatePrompt(title, description, subjects);
 
   // Create a Set for fast lookup
@@ -128,12 +123,11 @@ async function analyzeBookWithRetry(
 
       // Race between the API call and timeout
       const result = await Promise.race([
-        model.generateContent(prompt),
+        genAI.models.generateContent({model: MODEL_NAME, contents: prompt}),
         timeoutPromise,
       ]);
 
-      const response = result.response;
-      let subject = response.text().trim();
+      let subject = result.text.trim();
 
       // Clean up any extra punctuation or quotes
       subject = subject.replace(/^["']|["']$/g, "");
@@ -203,7 +197,7 @@ exports.getBookTopic = onRequest(
 
       // Initialize genAI if not already done
       if (!genAI) {
-        genAI = new GoogleGenerativeAI(apiKey);
+        genAI = new GoogleGenAI({apiKey});
       }
 
       // Log request method and origin
@@ -211,12 +205,6 @@ exports.getBookTopic = onRequest(
           `Received ${req.method} request from ` +
           `${req.headers.origin || "unknown"}`,
       );
-
-      // Handle CORS preflight
-      if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-      }
 
       // Only allow POST requests
       if (req.method !== "POST") {

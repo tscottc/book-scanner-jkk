@@ -483,6 +483,8 @@
         let currentBook = null;
         let lastScannedCode = null;
         let scanInProgress = false;
+        let scanCounts = {};
+        const REQUIRED_CONFIRMATIONS = 3; // barcode must be read this many times consistently
 
         // Cloud Function configuration
         const CLOUD_FUNCTION_URL = 'https://getbooktopic-pom3tqjr6a-uc.a.run.app';
@@ -499,7 +501,7 @@
                     header: true,
                     complete: function(results) {
                         directory = results.data.map(row => ({
-                            subject: row.SUBJECT || '',
+                            subject: (row.SUBJECT || '').trim(),
                             floor: row.FLOOR || '',
                             aisle: row.AISLE || '',
                             room: row['ROOM/DESCRIPTION'] || '',
@@ -524,6 +526,7 @@
             // Reset scan state
             scanInProgress = false;
             lastScannedCode = null;
+            scanCounts = {};
 
             Quagga.init({
                 inputStream: {
@@ -531,7 +534,10 @@
                     type: "LiveStream",
                     target: document.querySelector('#reader'),
                     constraints: {
-                        facingMode: "environment"
+                        facingMode: "environment",
+                        width: { min: 640, ideal: 1280 },
+                        height: { min: 480, ideal: 720 },
+                        advanced: [{ focusMode: "continuous" }]
                     },
                 },
                 decoder: {
@@ -560,32 +566,51 @@
             });
 
             Quagga.onDetected(function(result) {
-                if (result && result.codeResult && result.codeResult.code) {
-                    const code = result.codeResult.code;
-                    const format = result.codeResult.format;
+                if (!result || !result.codeResult || !result.codeResult.code) return;
+                if (scanInProgress) return;
 
-                    // Prevent duplicate scans and require minimum confidence
-                    if (scanInProgress || code === lastScannedCode) {
+                const code = result.codeResult.code;
+                const format = result.codeResult.format;
+
+                // Check confidence using per-character error scores (lower = better, threshold 0.15)
+                const decodedCodes = result.codeResult.decodedCodes || [];
+                const errors = decodedCodes
+                    .filter(x => x.error !== undefined)
+                    .map(x => x.error);
+                if (errors.length > 0) {
+                    const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
+                    if (avgError > 0.15) {
+                        console.log('Low confidence scan ignored. Avg error:', avgError.toFixed(3));
                         return;
                     }
-
-                    // Only accept barcodes that are likely ISBNs (10 or 13 digits)
-                    const cleanCode = code.replace(/[^0-9]/g, '');
-                    if (cleanCode.length !== 10 && cleanCode.length !== 13) {
-                        console.log('Ignoring barcode (wrong length):', code, 'Length:', cleanCode.length);
-                        return;
-                    }
-
-                    console.log('Detected barcode:', code, 'Format:', format);
-                    scanInProgress = true;
-                    lastScannedCode = code;
-
-                    // Show what was detected to user
-                    showStatus(`Detected ${format}: ${code}`);
-
-                    stopScanner();
-                    searchByISBN(code);
                 }
+
+                // Only accept barcodes that are likely ISBNs (10 or 13 digits)
+                const cleanCode = code.replace(/[^0-9]/g, '');
+                if (cleanCode.length !== 10 && cleanCode.length !== 13) {
+                    console.log('Ignoring barcode (wrong length):', code, 'Length:', cleanCode.length);
+                    return;
+                }
+
+                // Reset counts for any other code that was being tracked
+                if (lastScannedCode && lastScannedCode !== code) {
+                    scanCounts = {};
+                }
+
+                // Require REQUIRED_CONFIRMATIONS consistent reads before accepting
+                scanCounts[code] = (scanCounts[code] || 0) + 1;
+                lastScannedCode = code;
+
+                if (scanCounts[code] < REQUIRED_CONFIRMATIONS) {
+                    showStatus(`Reading barcode... (${scanCounts[code]}/${REQUIRED_CONFIRMATIONS})`);
+                    return;
+                }
+
+                console.log('Detected barcode:', code, 'Format:', format);
+                scanInProgress = true;
+                showStatus(`Detected ${format}: ${code}`);
+                stopScanner();
+                searchByISBN(code);
             });
         }
 
