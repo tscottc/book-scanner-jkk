@@ -273,6 +273,50 @@ exports.getBookTopic = onRequest(
 );
 
 // ===================================
+// Cloud Function: webSearch
+// ===================================
+exports.webSearch = onRequest({
+  cors: true,
+  timeoutSeconds: 15,
+  memory: "256MiB",
+  secrets: ["SERPER_API_KEY"],
+}, async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({error: "POST only"});
+    return;
+  }
+  const {query} = req.body;
+  if (!query) {
+    res.status(400).json({error: "query required"});
+    return;
+  }
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) {
+    logger.error("SERPER_API_KEY secret not configured");
+    res.status(500).json({error: "Web search service not configured"});
+    return;
+  }
+  try {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {"X-API-KEY": apiKey, "Content-Type": "application/json"},
+      body: JSON.stringify({q: query, num: 5}),
+    });
+    const data = await response.json();
+    const results = (data.organic || []).map((r) => ({
+      title: r.title,
+      snippet: r.snippet,
+      link: r.link,
+      displayLink: r.displayLink,
+    }));
+    res.status(200).json({results});
+  } catch (error) {
+    logger.error("Web search error:", error.message);
+    res.status(500).json({error: "Web search failed", message: error.message});
+  }
+});
+
+// ===================================
 // Cloud Function: identifyBookCover
 // ===================================
 exports.identifyBookCover = onRequest(
