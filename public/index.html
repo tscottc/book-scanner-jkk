@@ -450,8 +450,12 @@
 
         <div class="button-group">
             <button class="btn-primary" onclick="startScanner()">📷 Scan Barcode</button>
+            <button class="btn-primary" onclick="triggerCoverCapture()">📸 Scan Cover</button>
+        </div>
+        <div class="button-group" style="margin-top: -4px;">
             <button class="btn-secondary" onclick="showSearch()">🔍 Manual Search</button>
         </div>
+        <input type="file" id="cover-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCoverCapture(event)">
 
         <div id="scanner-container">
             <div id="reader"></div>
@@ -479,6 +483,7 @@
 
     <script>
         let scanner = null;
+        let quaggaHandler = null;
         let directory = [];
         let currentBook = null;
         let lastScannedCode = null;
@@ -488,6 +493,7 @@
 
         // Cloud Function configuration
         const CLOUD_FUNCTION_URL = 'https://getbooktopic-pom3tqjr6a-uc.a.run.app';
+        const COVER_FUNCTION_URL = 'https://identifybookcover-pom3tqjr6a-uc.a.run.app';
         const USE_AI_CLASSIFICATION = true; // AI classification enabled! 🎉
 
         // Load and parse CSV directory on page load
@@ -561,63 +567,153 @@
                     return;
                 }
 
-                scanner = true; // Mark scanner as active
-                Quagga.start();
-            });
+                scanner = true;
 
-            Quagga.onDetected(function(result) {
-                if (!result || !result.codeResult || !result.codeResult.code) return;
-                if (scanInProgress) return;
+                // Remove any leftover handler before registering a new one
+                if (quaggaHandler) {
+                    Quagga.offDetected(quaggaHandler);
+                    quaggaHandler = null;
+                }
 
-                const code = result.codeResult.code;
-                const format = result.codeResult.format;
+                quaggaHandler = function(result) {
+                    if (!result || !result.codeResult || !result.codeResult.code) return;
+                    if (scanInProgress) return;
 
-                // Check confidence using per-character error scores (lower = better, threshold 0.15)
-                const decodedCodes = result.codeResult.decodedCodes || [];
-                const errors = decodedCodes
-                    .filter(x => x.error !== undefined)
-                    .map(x => x.error);
-                if (errors.length > 0) {
-                    const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
-                    if (avgError > 0.15) {
-                        console.log('Low confidence scan ignored. Avg error:', avgError.toFixed(3));
+                    const code = result.codeResult.code;
+                    const format = result.codeResult.format;
+
+                    // Check confidence using per-character error scores (lower = better, threshold 0.15)
+                    const decodedCodes = result.codeResult.decodedCodes || [];
+                    const errors = decodedCodes
+                        .filter(x => x.error !== undefined)
+                        .map(x => x.error);
+                    if (errors.length > 0) {
+                        const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
+                        if (avgError > 0.15) {
+                            console.log('Low confidence scan ignored. Avg error:', avgError.toFixed(3));
+                            return;
+                        }
+                    }
+
+                    // Only accept barcodes that are likely ISBNs (10 or 13 digits)
+                    const cleanCode = code.replace(/[^0-9]/g, '');
+                    if (cleanCode.length !== 10 && cleanCode.length !== 13) {
+                        console.log('Ignoring barcode (wrong length):', code, 'Length:', cleanCode.length);
                         return;
                     }
-                }
 
-                // Only accept barcodes that are likely ISBNs (10 or 13 digits)
-                const cleanCode = code.replace(/[^0-9]/g, '');
-                if (cleanCode.length !== 10 && cleanCode.length !== 13) {
-                    console.log('Ignoring barcode (wrong length):', code, 'Length:', cleanCode.length);
-                    return;
-                }
+                    // Reset counts if a different code appears
+                    if (lastScannedCode && lastScannedCode !== code) {
+                        scanCounts = {};
+                    }
 
-                // Reset counts for any other code that was being tracked
-                if (lastScannedCode && lastScannedCode !== code) {
-                    scanCounts = {};
-                }
+                    // Require REQUIRED_CONFIRMATIONS consistent reads before accepting
+                    scanCounts[code] = (scanCounts[code] || 0) + 1;
+                    lastScannedCode = code;
 
-                // Require REQUIRED_CONFIRMATIONS consistent reads before accepting
-                scanCounts[code] = (scanCounts[code] || 0) + 1;
-                lastScannedCode = code;
+                    if (scanCounts[code] < REQUIRED_CONFIRMATIONS) {
+                        showStatus(`Reading barcode... (${scanCounts[code]}/${REQUIRED_CONFIRMATIONS})`);
+                        return;
+                    }
 
-                if (scanCounts[code] < REQUIRED_CONFIRMATIONS) {
-                    showStatus(`Reading barcode... (${scanCounts[code]}/${REQUIRED_CONFIRMATIONS})`);
-                    return;
-                }
+                    console.log('Detected barcode:', code, 'Format:', format);
+                    scanInProgress = true;
+                    showStatus(`Detected ${format}: ${code}`);
+                    stopScanner();
+                    searchByISBN(code);
+                };
 
-                console.log('Detected barcode:', code, 'Format:', format);
-                scanInProgress = true;
-                showStatus(`Detected ${format}: ${code}`);
-                stopScanner();
-                searchByISBN(code);
+                Quagga.onDetected(quaggaHandler);
+                Quagga.start();
             });
+        }
+
+        function triggerCoverCapture() {
+            document.getElementById('scanner-container').style.display = 'none';
+            document.getElementById('search-container').style.display = 'none';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('cover-input').value = ''; // reset so same file can be reused
+            document.getElementById('cover-input').click();
+        }
+
+        async function handleCoverCapture(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showStatus('Reading cover...');
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const dataUrl = e.target.result;
+                // dataUrl = "data:image/jpeg;base64,/9j/..."
+                const [meta, imageBase64] = dataUrl.split(',');
+                const mimeType = meta.match(/:(.*?);/)[1];
+
+                try {
+                    showStatus('Identifying book from cover...');
+                    const response = await fetch(COVER_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({imageBase64, mimeType})
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.title) {
+                        showError('Could not identify book from cover. Try a clearer photo or use Manual Search.');
+                        return;
+                    }
+
+                    console.log('Cover identified:', data.title, 'by', data.author);
+                    showStatus('Looking up book...');
+
+                    // Build the best query we can from what Gemini returned
+                    const query = data.author
+                        ? `intitle:${encodeURIComponent(data.title)}+inauthor:${encodeURIComponent(data.author)}`
+                        : `intitle:${encodeURIComponent(data.title)}`;
+
+                    const booksResponse = await fetch(
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5`
+                    );
+                    const booksData = await booksResponse.json();
+                    hideStatus();
+
+                    if (!booksData.items || booksData.items.length === 0) {
+                        // Fallback: try a plain title search
+                        const fallback = await fetch(
+                            `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(data.title)}&maxResults=5`
+                        );
+                        const fallbackData = await fallback.json();
+                        if (!fallbackData.items || fallbackData.items.length === 0) {
+                            showError(`Could not find "${data.title}" in book database. Try Manual Search.`);
+                            return;
+                        }
+                        fallbackData.items.length === 1
+                            ? displayBook(fallbackData.items[0])
+                            : showResultsModal(fallbackData.items);
+                        return;
+                    }
+
+                    booksData.items.length === 1
+                        ? displayBook(booksData.items[0])
+                        : showResultsModal(booksData.items);
+
+                } catch (error) {
+                    hideStatus();
+                    showError('Cover scan failed. Please check your connection or try Manual Search.');
+                    console.error('Cover scan error:', error);
+                }
+            };
+            reader.readAsDataURL(file);
         }
 
         function stopScanner() {
             if (scanner) {
+                if (quaggaHandler) {
+                    Quagga.offDetected(quaggaHandler);
+                    quaggaHandler = null;
+                }
                 Quagga.stop();
-                Quagga.offDetected();
                 scanner = null;
                 document.getElementById('scanner-container').style.display = 'none';
             }
@@ -705,13 +801,13 @@
                 }
 
                 console.log('Found book:', data.items[0].volumeInfo.title);
-                displayBook(data.items[0]);
-                scanInProgress = false; // Reset flag
+                await displayBook(data.items[0]);
+                scanInProgress = false;
             } catch (error) {
                 hideStatus();
                 showError('Lookup failed. Please check your connection.');
                 console.error('ISBN lookup error:', error);
-                scanInProgress = false; // Reset flag
+                scanInProgress = false;
             }
         }
 
@@ -767,17 +863,12 @@
             if (USE_AI_CLASSIFICATION && currentBook.description && currentBook.description !== 'No description available.') {
                 try {
                     aiMatch = await classifyBookWithAI(currentBook.title, currentBook.description);
-                    if (aiMatch) {
-                        usedAI = true;
-                        hideStatus();
-                    }
+                    if (aiMatch) usedAI = true;
                 } catch (error) {
                     console.warn('AI classification failed, falling back to keyword matching:', error);
-                    hideStatus();
                 }
-            } else {
-                hideStatus();
             }
+            hideStatus();
 
             // Fall back to keyword matching if AI didn't work
             const keywordMatches = findMatches(currentBook.description, currentBook.categories.join(' '));

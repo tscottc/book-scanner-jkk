@@ -273,6 +273,89 @@ exports.getBookTopic = onRequest(
 );
 
 // ===================================
-// Optional: Health Check Endpoint
+// Cloud Function: identifyBookCover
 // ===================================
-// Removed to avoid deployment conflicts - not needed for main functionality
+exports.identifyBookCover = onRequest(
+    {
+      cors: true,
+      timeoutSeconds: 30,
+      memory: "256MiB",
+      secrets: ["GEMINI_API_KEY"],
+    },
+    async (req, res) => {
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        logger.error("GEMINI_API_KEY secret not configured");
+        res.status(500).json({error: "AI service is not properly configured"});
+        return;
+      }
+
+      if (!genAI) {
+        genAI = new GoogleGenAI({apiKey});
+      }
+
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Only POST requests are accepted"});
+        return;
+      }
+
+      const {imageBase64, mimeType} = req.body;
+
+      if (!imageBase64 || !mimeType) {
+        res.status(400).json({error: "imageBase64 and mimeType are required"});
+        return;
+      }
+
+      try {
+        const prompt = `Look at this book cover image. Identify the book ` +
+          `title and author name visible on the cover. Return ONLY a valid ` +
+          `JSON ` +
+          `object with exactly these two fields: ` +
+          `{"title": "the exact title", "author": "the author name"}. ` +
+          `If you cannot determine the author, use an empty string. ` +
+          `Do not include any other text, markdown, or explanation.`;
+
+        const result = await genAI.models.generateContent({
+          model: MODEL_NAME,
+          contents: [
+            {
+              parts: [
+                {inlineData: {mimeType, data: imageBase64}},
+                {text: prompt},
+              ],
+            },
+          ],
+        });
+
+        let text = result.text.trim();
+
+        // Strip markdown code fences if present
+        text = text.replace(/^```(?:json)?\s*/i, "");
+        text = text.replace(/\s*```$/, "");
+
+        const parsed = JSON.parse(text);
+
+        if (!parsed.title) {
+          res.status(422).json({
+            error: "Could not identify book title from cover",
+          });
+          return;
+        }
+
+        logger.info(
+            `Cover identified: "${parsed.title}" by "${parsed.author}"`,
+        );
+        res.status(200).json({
+          title: parsed.title.trim(),
+          author: (parsed.author || "").trim(),
+        });
+      } catch (error) {
+        logger.error("Cover identification error:", error.message);
+        res.status(500).json({
+          error: "Failed to identify book cover",
+          message: error.message,
+        });
+      }
+    },
+);
