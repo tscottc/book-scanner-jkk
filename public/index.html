@@ -894,14 +894,19 @@
         }
 
         async function openLibraryISBNLookup(isbn) {
-            debugLog(`OL: looking up ISBN ${isbn}`);
-            const url = `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`;
-            const response = await fetchWithTimeout(url, {}, 15000);
-            const data = await response.json();
-            const book = data[`ISBN:${isbn}`];
-            if (!book) { debugLog(`OL: not found`); return null; }
-            debugLog(`OL: found "${book.title}"`);
-            return adaptOpenLibraryBook(book, isbn);
+            debugLog(`OL ISBN: ${isbn}`);
+            const url = `https://openlibrary.org/search.json?isbn=${isbn}&fields=key,title,author_name,isbn,subject,first_sentence&limit=1`;
+            try {
+                const response = await fetchWithTimeout(url, {}, 20000);
+                debugLog(`OL ISBN: HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data.docs || !data.docs.length) { debugLog(`OL ISBN: not found`); return null; }
+                debugLog(`OL ISBN: found "${data.docs[0].title}"`);
+                return adaptOpenLibraryDoc(data.docs[0]);
+            } catch (err) {
+                debugLog(`OL ISBN fetch error: ${err.name}: ${err.message}`);
+                return null;
+            }
         }
 
         async function openLibraryTextSearch(query, title, author) {
@@ -911,12 +916,18 @@
             } else {
                 url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=5&fields=key,title,author_name,isbn,subject,first_sentence`;
             }
-            debugLog(`OL search: ${title || query}`);
-            const response = await fetchWithTimeout(url, {}, 15000);
-            const data = await response.json();
-            if (!data.docs || !data.docs.length) { debugLog(`OL search: no results`); return []; }
-            debugLog(`OL search: ${data.docs.length} result(s)`);
-            return data.docs.map(adaptOpenLibraryDoc);
+            debugLog(`OL text: ${title || query}`);
+            try {
+                const response = await fetchWithTimeout(url, {}, 20000);
+                debugLog(`OL text: HTTP ${response.status}`);
+                const data = await response.json();
+                if (!data.docs || !data.docs.length) { debugLog(`OL text: no results`); return []; }
+                debugLog(`OL text: ${data.docs.length} result(s)`);
+                return data.docs.map(adaptOpenLibraryDoc);
+            } catch (err) {
+                debugLog(`OL text fetch error: ${err.name}: ${err.message}`);
+                return [];
+            }
         }
 
         async function searchByISBN(isbn) {
