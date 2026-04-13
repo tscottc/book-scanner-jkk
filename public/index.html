@@ -1088,7 +1088,7 @@
             document.getElementById('save-modal').classList.add('active');
         }
 
-        function openSaveModalFromWeb(index) {
+        async function openSaveModalFromWeb(index) {
             const r = (window._webResults || [])[index];
             if (!r) return;
             pendingSave = {
@@ -1097,10 +1097,27 @@
                 isbn:        '',
                 subject:     '',
                 description: r.snippet || '',
-                source:      'web_search',
+                source:      currentScanSource || 'web_search',
                 modalTitle:  'Save Book to Library'
             };
             openSaveModal();
+
+            // Classify with AI in background using title + snippet as the description
+            if (USE_AI_CLASSIFICATION && r.title) {
+                try {
+                    const match = await classifyBookWithAI(r.title, r.snippet || r.title);
+                    if (match) {
+                        const sel = document.getElementById('save-subject');
+                        if (sel) {
+                            for (let i = 0; i < sel.options.length; i++) {
+                                if (sel.options[i].value === match.subject) { sel.selectedIndex = i; break; }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('AI classification failed for web result:', e);
+                }
+            }
         }
 
         function openManualAdd() {
