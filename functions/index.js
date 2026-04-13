@@ -6,6 +6,9 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {GoogleGenAI} = require("@google/genai");
+const admin = require("firebase-admin");
+
+admin.initializeApp();
 
 // ===================================
 // Configuration
@@ -21,9 +24,44 @@ const MODEL_NAME = "gemini-2.5-flash";
 const MAX_RETRIES = 2;
 const TIMEOUT_MS = 15000;
 
+const ALLOWED_ORIGINS = [
+  "https://book-scanner-jkk.web.app",
+  "https://book-scanner-jkk.firebaseapp.com",
+];
+
+const MAX_TITLE_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_QUERY_LENGTH = 300;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 // ===================================
 // Helper Functions
 // ===================================
+
+/**
+ * Verifies Firebase ID token from Authorization header.
+ * Returns the decoded token, or throws with a 401-friendly message.
+ * @param {object} req - Express request object
+ * @return {Promise<object>} Decoded Firebase token
+ */
+async function verifyAuth(req) {
+  const authHeader = req.get("Authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ?
+    authHeader.slice(7) : null;
+  if (!token) {
+    const err = new Error("Missing Authorization token");
+    err.statusCode = 401;
+    throw err;
+  }
+  try {
+    return await admin.auth().verifyIdToken(token);
+  } catch (_) {
+    const err = new Error("Invalid or expired token");
+    err.statusCode = 401;
+    throw err;
+  }
+}
 
 /**
  * Validates request body for required fields
@@ -42,12 +80,18 @@ function validateRequestBody(body) {
       typeof body.title !== "string" ||
       body.title.trim() === "") {
     errors.push("Title is required and must be a non-empty string");
+  } else if (body.title.length > MAX_TITLE_LENGTH) {
+    errors.push(`Title must be ${MAX_TITLE_LENGTH} characters or fewer`);
   }
 
   if (!body.description ||
       typeof body.description !== "string" ||
       body.description.trim() === "") {
     errors.push("Description is required and must be a non-empty string");
+  } else if (body.description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.push(
+        `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer`,
+    );
   }
 
   if (!body.subjects || !Array.isArray(body.subjects) ||
@@ -177,12 +221,20 @@ async function analyzeBookWithRetry(
 // ===================================
 exports.getBookTopic = onRequest(
     {
-      cors: true,
+      cors: ALLOWED_ORIGINS,
       timeoutSeconds: 30,
       memory: "256MiB",
       secrets: ["GEMINI_API_KEY"],
     },
     async (req, res) => {
+      // Verify Firebase auth token
+      try {
+        await verifyAuth(req);
+      } catch (err) {
+        res.status(err.statusCode || 401).json({error: err.message});
+        return;
+      }
+
       // Get API key from secrets
       const apiKey = process.env.GEMINI_API_KEY;
 
@@ -276,18 +328,30 @@ exports.getBookTopic = onRequest(
 // Cloud Function: webSearch
 // ===================================
 exports.webSearch = onRequest({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   timeoutSeconds: 15,
   memory: "256MiB",
   secrets: ["SERPER_API_KEY"],
 }, async (req, res) => {
+  try {
+    await verifyAuth(req);
+  } catch (err) {
+    res.status(err.statusCode || 401).json({error: err.message});
+    return;
+  }
   if (req.method !== "POST") {
     res.status(405).json({error: "POST only"});
     return;
   }
   const {query} = req.body;
-  if (!query) {
+  if (!query || typeof query !== "string" || query.trim() === "") {
     res.status(400).json({error: "query required"});
+    return;
+  }
+  if (query.length > MAX_QUERY_LENGTH) {
+    res.status(400).json({
+      error: `Query must be ${MAX_QUERY_LENGTH} characters or fewer`,
+    });
     return;
   }
   const apiKey = process.env.SERPER_API_KEY;
@@ -321,12 +385,19 @@ exports.webSearch = onRequest({
 // ===================================
 exports.identifyBookCover = onRequest(
     {
-      cors: true,
+      cors: ALLOWED_ORIGINS,
       timeoutSeconds: 30,
       memory: "256MiB",
       secrets: ["GEMINI_API_KEY"],
     },
     async (req, res) => {
+      try {
+        await verifyAuth(req);
+      } catch (err) {
+        res.status(err.statusCode || 401).json({error: err.message});
+        return;
+      }
+
       const apiKey = process.env.GEMINI_API_KEY;
 
       if (!apiKey) {
@@ -348,6 +419,21 @@ exports.identifyBookCover = onRequest(
 
       if (!imageBase64 || !mimeType) {
         res.status(400).json({error: "imageBase64 and mimeType are required"});
+        return;
+      }
+
+      if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+        const allowed = ALLOWED_MIME_TYPES.join(",");
+        res.status(400).json({
+          error: `Unsupported image type. Allowed: ${allowed}`,
+        });
+        return;
+      }
+
+      // base64 expands by ~4/3, so check approximate decoded size
+      const approxBytes = (imageBase64.length * 3) / 4;
+      if (approxBytes > MAX_IMAGE_BYTES) {
+        res.status(400).json({error: "Image exceeds 5 MB limit"});
         return;
       }
 

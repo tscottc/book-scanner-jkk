@@ -11,258 +11,336 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F7F8FA;
             padding: 0;
             padding-bottom: 80px;
+            color: #111827;
+            -webkit-font-smoothing: antialiased;
         }
 
         /* ---- Login overlay ---- */
         #login-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%);
+            background: #F7F8FA;
             z-index: 9999; display: flex; justify-content: center; align-items: center;
         }
         .login-box {
-            background: white; border-radius: 16px; padding: 40px 32px;
-            text-align: center; max-width: 360px; width: 90%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: white;
+            border-radius: 12px;
+            padding: 48px 40px;
+            text-align: center;
+            max-width: 380px;
+            width: 90%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 8px 28px rgba(0,0,0,0.09);
+            border: 1px solid #E5E7EB;
         }
-        .login-box h2 { font-size: 28px; margin-bottom: 8px; }
-        .login-box p  { color: #666; margin-bottom: 24px; font-size: 15px; }
+        .login-icon {
+            width: 48px; height: 48px;
+            background: #1E3A5F;
+            border-radius: 10px;
+            margin: 0 auto 20px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .login-icon svg { width: 26px; height: 26px; fill: white; }
+        .login-box h2 {
+            font-size: 20px; font-weight: 700; margin-bottom: 6px;
+            color: #111827; letter-spacing: -0.3px;
+        }
+        .login-box p { color: #6B7280; margin-bottom: 28px; font-size: 14px; }
         .btn-google {
             display: flex; align-items: center; justify-content: center; gap: 10px;
-            width: 100%; padding: 14px 20px; background: white; border: 2px solid #ddd;
-            border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;
-            transition: all 0.2s; color: #333;
+            width: 100%; padding: 10px 18px; background: white;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
+            transition: all 0.15s; color: #374151; font-family: inherit;
         }
-        .btn-google:hover { background: #f8f9fa; border-color: #007AFF; }
+        .btn-google:hover {
+            background: #F9FAFB; border-color: #9CA3AF;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+        }
 
         /* ---- Navbar ---- */
         .navbar {
-            background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
             position: sticky; top: 0; z-index: 100;
         }
         .navbar-container {
             max-width: 700px; margin: 0 auto; display: flex; padding: 0; align-items: stretch;
         }
         .nav-tab {
-            flex: 1; padding: 16px; text-align: center; text-decoration: none;
-            color: #666; font-weight: 600; font-size: 14px;
-            border-bottom: 3px solid transparent; transition: all 0.2s;
-            background: white; border: none; cursor: pointer;
+            flex: 1; padding: 14px 16px; text-align: center; text-decoration: none;
+            color: #6B7280; font-weight: 500; font-size: 13px;
+            border-bottom: 2px solid transparent; transition: all 0.15s;
+            background: white; border: none; border-bottom: 2px solid transparent;
+            cursor: pointer; font-family: inherit;
         }
-        .nav-tab:hover { background: #f8f9fa; color: #007AFF; }
-        .nav-tab.active { color: #007AFF; border-bottom-color: #007AFF; }
+        .nav-tab:hover { color: #1E3A5F; background: #F9FAFB; }
+        .nav-tab.active { color: #1E3A5F; border-bottom-color: #1E3A5F; font-weight: 600; }
         .nav-user {
             display: flex; align-items: center; gap: 6px;
-            padding: 8px 10px; border-left: 1px solid #eee; flex-shrink: 0;
+            padding: 8px 12px; border-left: 1px solid #E5E7EB; flex-shrink: 0;
         }
         #user-info {
-            font-size: 11px; color: #666; max-width: 90px;
+            font-size: 11px; color: #9CA3AF; max-width: 90px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .btn-signout {
-            flex: none; font-size: 11px; padding: 4px 8px;
-            background: #f0f0f0; color: #333; border-radius: 6px;
-            border: 1px solid #ddd; cursor: pointer; font-weight: 600;
+            flex: none; font-size: 11px; padding: 4px 10px;
+            background: white; color: #6B7280; border-radius: 6px;
+            border: 1px solid #D1D5DB; cursor: pointer; font-weight: 500;
+            font-family: inherit; transition: all 0.15s;
         }
+        .btn-signout:hover { background: #F9FAFB; color: #374151; }
 
         /* ---- Main container ---- */
-        .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
 
         .header {
-            background: white; padding: 20px; border-radius: 12px;
-            margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white; padding: 20px 22px; border-radius: 10px;
+            margin-bottom: 16px;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        h1 { font-size: 24px; margin-bottom: 8px; }
-        .subtitle { color: #666; font-size: 14px; }
+        h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.3px; }
+        .subtitle { color: #6B7280; font-size: 13px; }
 
-        .button-group { display: flex; gap: 12px; margin-bottom: 16px; }
+        .button-group { display: flex; gap: 10px; margin-bottom: 10px; }
 
         button {
-            flex: 1; padding: 16px; font-size: 16px; font-weight: 600;
-            border: none; border-radius: 12px; cursor: pointer; transition: all 0.2s;
+            flex: 1; padding: 13px 16px; font-size: 14px; font-weight: 500;
+            border: none; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+            font-family: inherit;
         }
-        .btn-primary { background: #007AFF; color: white; }
-        .btn-primary:active { background: #0051D5; }
-        .btn-secondary { background: white; color: #007AFF; border: 2px solid #007AFF; }
-        .btn-secondary:active { background: #f0f0f0; }
-        .btn-danger { background: white; color: #c62828; border: 2px solid #c62828; }
-        .btn-danger:active { background: #ffebee; }
-        .btn-sm { padding: 8px 12px; font-size: 13px; border-radius: 8px; flex: none; }
+        .btn-primary { background: #1E3A5F; color: white; }
+        .btn-primary:hover { background: #162D4A; }
+        .btn-primary:active { background: #0F1F33; }
+        .btn-secondary {
+            background: white; color: #374151;
+            border: 1px solid #D1D5DB;
+        }
+        .btn-secondary:hover { background: #F9FAFB; border-color: #9CA3AF; }
+        .btn-secondary:active { background: #F3F4F6; }
+        .btn-danger { background: white; color: #B91C1C; border: 1px solid #FECACA; }
+        .btn-danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
+        .btn-sm { padding: 7px 12px; font-size: 12px; border-radius: 6px; flex: none; }
 
         /* ---- Scanner ---- */
         #scanner-container {
-            display: none; background: white; border-radius: 12px;
+            display: none; background: white; border-radius: 10px;
             padding: 16px; margin-bottom: 16px;
+            border: 1px solid #E5E7EB;
         }
-        #reader { width: 100%; border-radius: 8px; overflow: hidden; position: relative; }
+        #reader { width: 100%; border-radius: 6px; overflow: hidden; position: relative; }
         #reader video { width: 100%; height: auto; display: block; }
         #reader canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         #reader canvas.drawingBuffer { position: absolute; top: 0; left: 0; }
 
         /* ---- Search ---- */
         .search-container {
-            display: none; background: white; border-radius: 12px;
+            display: none; background: white; border-radius: 10px;
             padding: 16px; margin-bottom: 16px;
+            border: 1px solid #E5E7EB;
         }
         .search-input {
-            width: 100%; padding: 12px; font-size: 16px;
-            border: 2px solid #ddd; border-radius: 8px; margin-bottom: 12px;
+            width: 100%; padding: 10px 12px; font-size: 14px;
+            border: 1px solid #D1D5DB; border-radius: 7px; margin-bottom: 10px;
+            font-family: inherit; color: #111827; outline: none;
+            transition: border-color 0.15s;
         }
+        .search-input:focus { border-color: #1E3A5F; box-shadow: 0 0 0 3px rgba(30,58,95,0.08); }
 
         /* ---- Result card ---- */
         .result-card {
-            background: white; border-radius: 12px; padding: 20px;
-            margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white; border-radius: 10px; padding: 20px;
+            margin-bottom: 14px;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .book-title  { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #000; }
-        .book-author { font-size: 16px; color: #666; margin-bottom: 12px; }
+        .book-title  { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #111827; letter-spacing: -0.2px; }
+        .book-author { font-size: 14px; color: #6B7280; margin-bottom: 12px; }
         .book-category {
-            display: inline-block; padding: 6px 12px; background: #e3f2fd;
-            color: #1976d2; border-radius: 6px; font-size: 14px; margin-bottom: 12px;
+            display: inline-block; padding: 4px 10px;
+            background: #EFF6FF; color: #1D4ED8;
+            border-radius: 5px; font-size: 12px; font-weight: 500; margin-bottom: 12px;
         }
         .description {
-            color: #333; line-height: 1.6; margin-bottom: 12px;
+            color: #374151; line-height: 1.65; font-size: 14px; margin-bottom: 12px;
             max-height: 80px; overflow: hidden; transition: max-height 0.3s;
         }
         .description.expanded { max-height: none; }
-        .description mark { background: #fff59d; padding: 2px 4px; border-radius: 3px; font-weight: 600; }
-        .expand-btn { color: #007AFF; font-size: 14px; cursor: pointer; background: none; border: none; padding: 4px 0; }
+        .description mark { background: #FEF9C3; padding: 1px 3px; border-radius: 2px; font-weight: 500; }
+        .expand-btn {
+            color: #1E3A5F; font-size: 13px; cursor: pointer;
+            background: none; border: none; padding: 4px 0; font-family: inherit; font-weight: 500;
+        }
 
         /* ---- Locations ---- */
-        .locations { margin-top: 16px; padding-top: 16px; border-top: 2px solid #f0f0f0; }
-        .locations-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+        .locations { margin-top: 16px; padding-top: 16px; border-top: 1px solid #F3F4F6; }
+        .locations-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #374151; }
         .location-item {
-            padding: 12px; background: #f8f9fa; border-radius: 8px;
-            margin-bottom: 8px; border-left: 4px solid #4CAF50;
+            padding: 12px 14px; background: #F9FAFB; border-radius: 7px;
+            margin-bottom: 8px; border-left: 3px solid #6B7280;
+            border: 1px solid #E5E7EB; border-left: 3px solid #6B7280;
         }
-        .location-item.primary  { background: #e8f5e9; border-left-color: #2e7d32; }
+        .location-item.primary  { background: #F0FDF4; border-color: #BBF7D0; border-left-color: #16A34A; }
         .location-item.ai-result {
-            background: #e3f2fd; border-left: 4px solid #1976d2;
-            box-shadow: 0 2px 4px rgba(25,118,210,0.2);
+            background: #EFF6FF; border-color: #BFDBFE; border-left: 3px solid #2563EB;
         }
-        .location-item.keyword-result { background: #fff3e0; border-left: 4px solid #f57c00; }
-        .location-subject { font-weight: 700; margin-bottom: 4px; }
-        .location-detail  { font-size: 14px; color: #666; margin-bottom: 4px; }
-        .location-matches { font-size: 12px; color: #888; }
+        .location-item.keyword-result {
+            background: #FFFBEB; border-color: #FDE68A; border-left: 3px solid #D97706;
+        }
+        .location-subject { font-weight: 600; margin-bottom: 3px; font-size: 14px; color: #111827; }
+        .location-detail  { font-size: 13px; color: #6B7280; margin-bottom: 3px; }
+        .location-matches { font-size: 12px; color: #9CA3AF; }
 
         /* ---- Method badges ---- */
         .method-badge {
-            display: inline-block; padding: 4px 8px; border-radius: 4px;
-            font-size: 11px; font-weight: 700; text-transform: uppercase; margin-left: 8px;
+            display: inline-block; padding: 2px 7px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.4px; margin-left: 8px;
         }
-        .badge-ai      { background: #1976d2; color: white; }
-        .badge-keyword { background: #f57c00; color: white; }
+        .badge-ai      { background: #DBEAFE; color: #1D4ED8; }
+        .badge-keyword { background: #FEF3C7; color: #92400E; }
 
         /* ---- Source badges (saved books) ---- */
         .source-badge {
-            display: inline-block; padding: 3px 8px; border-radius: 4px;
-            font-size: 11px; font-weight: 700; text-transform: uppercase; margin-right: 6px;
+            display: inline-block; padding: 2px 7px; border-radius: 4px;
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.4px; margin-right: 5px;
         }
-        .source-isbn   { background: #1976d2; color: white; }
-        .source-cover  { background: #7b1fa2; color: white; }
-        .source-search { background: #388e3c; color: white; }
-        .source-web    { background: #0288d1; color: white; }
-        .source-manual { background: #795548; color: white; }
+        .source-isbn   { background: #DBEAFE; color: #1E40AF; }
+        .source-cover  { background: #EDE9FE; color: #6D28D9; }
+        .source-search { background: #D1FAE5; color: #065F46; }
+        .source-web    { background: #E0F2FE; color: #0369A1; }
+        .source-manual { background: #F3F4F6; color: #374151; }
 
         /* ---- Price / Save sections ---- */
-        .price-section { margin-top: 16px; padding-top: 16px; border-top: 2px solid #f0f0f0; }
+        .price-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #F3F4F6; }
         .price-btn {
-            width: 100%; padding: 14px; background: #FF9500; color: white;
+            width: 100%; padding: 12px; background: #1E3A5F; color: white;
             text-decoration: none; display: block; text-align: center;
-            border-radius: 8px; font-weight: 600;
+            border-radius: 7px; font-weight: 500; font-size: 14px;
+            transition: background 0.15s;
         }
+        .price-btn:hover { background: #162D4A; }
         .save-section { margin-top: 12px; }
 
         /* ---- Web results ---- */
         .web-result-card {
-            background: white; border-radius: 10px; padding: 14px;
-            margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-            border-left: 4px solid #2e7d32;
+            background: white; border-radius: 8px; padding: 14px;
+            margin-bottom: 10px;
+            border: 1px solid #E5E7EB;
+            border-left: 3px solid #16A34A;
         }
-        .web-result-title   { font-weight: 700; margin-bottom: 4px; font-size: 15px; }
-        .web-result-link    { font-size: 12px; color: #2e7d32; margin-bottom: 6px; }
-        .web-result-snippet { font-size: 14px; color: #444; line-height: 1.4; }
+        .web-result-title   { font-weight: 600; margin-bottom: 3px; font-size: 14px; color: #111827; }
+        .web-result-link    { font-size: 11px; color: #16A34A; margin-bottom: 5px; }
+        .web-result-snippet { font-size: 13px; color: #6B7280; line-height: 1.5; }
 
         /* ---- Status / error ---- */
-        .loading { text-align: center; padding: 40px; color: #666; }
-        .error { background: #ffebee; color: #c62828; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        .loading { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
+        .error {
+            background: #FEF2F2; color: #B91C1C;
+            border: 1px solid #FECACA;
+            padding: 14px 16px; border-radius: 8px; margin-bottom: 14px;
+            font-size: 14px;
+        }
         .status {
-            position: fixed; bottom: 16px; left: 16px; right: 16px; padding: 12px;
-            background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            font-size: 14px; color: #666; text-align: center; z-index: 200;
+            position: fixed; bottom: 16px; left: 16px; right: 16px; padding: 12px 16px;
+            background: white; border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            border: 1px solid #E5E7EB;
+            font-size: 13px; color: #374151; text-align: center; z-index: 200;
         }
 
         /* ---- Modals ---- */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 1000;
+            background: rgba(0,0,0,0.35); z-index: 1000;
             justify-content: center; align-items: center; padding: 16px;
+            backdrop-filter: blur(2px);
         }
         .modal.active { display: flex; }
         .modal-content {
             background: white; border-radius: 12px; max-width: 500px; width: 100%;
-            max-height: 85vh; overflow-y: auto; padding: 20px; position: relative;
+            max-height: 85vh; overflow-y: auto; padding: 24px; position: relative;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.14);
         }
-        .modal-header { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+        .modal-header { font-size: 17px; font-weight: 700; margin-bottom: 16px; color: #111827; letter-spacing: -0.2px; }
         .modal-item {
-            padding: 16px; border: 2px solid #e0e0e0; border-radius: 8px;
-            margin-bottom: 12px; cursor: pointer; transition: all 0.2s;
+            padding: 14px 16px; border: 1px solid #E5E7EB; border-radius: 8px;
+            margin-bottom: 10px; cursor: pointer; transition: all 0.15s;
         }
-        .modal-item:hover { border-color: #007AFF; background: #f8f9fa; }
-        .modal-item-title  { font-weight: 700; margin-bottom: 4px; }
-        .modal-item-author { color: #666; font-size: 14px; }
+        .modal-item:hover { border-color: #1E3A5F; background: #F7F8FA; }
+        .modal-item-title  { font-weight: 600; margin-bottom: 3px; font-size: 14px; }
+        .modal-item-author { color: #6B7280; font-size: 13px; }
         .close-modal {
-            position: absolute; top: 14px; right: 14px; background: none; border: none;
-            font-size: 24px; cursor: pointer; color: #666; padding: 0;
-            width: 32px; height: 32px; line-height: 32px; text-align: center; flex: none;
+            position: absolute; top: 16px; right: 16px; background: none; border: none;
+            font-size: 20px; cursor: pointer; color: #9CA3AF; padding: 0;
+            width: 28px; height: 28px; line-height: 28px; text-align: center; flex: none;
+            border-radius: 6px; transition: all 0.15s;
         }
+        .close-modal:hover { background: #F3F4F6; color: #374151; }
 
         /* ---- Save / form modal ---- */
         .form-group { margin-bottom: 14px; }
-        .form-group label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; color: #333; }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 10px 12px; font-size: 15px;
-            border: 2px solid #ddd; border-radius: 8px; outline: none;
-            transition: border-color 0.2s; font-family: inherit;
+        .form-group label {
+            display: block; font-weight: 500; font-size: 13px;
+            margin-bottom: 5px; color: #374151;
         }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #007AFF; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 9px 11px; font-size: 14px;
+            border: 1px solid #D1D5DB; border-radius: 7px; outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            font-family: inherit; color: #111827; background: white;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: #1E3A5F;
+            box-shadow: 0 0 0 3px rgba(30,58,95,0.08);
+        }
         .form-group textarea { resize: vertical; min-height: 60px; }
 
         /* ---- Saved Books view ---- */
-        #saved-view { max-width: 600px; margin: 0 auto; padding: 16px; }
+        #saved-view { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
         .saved-header {
             display: flex; justify-content: space-between; align-items: center;
-            background: white; padding: 16px 20px; border-radius: 12px;
-            margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white; padding: 16px 20px; border-radius: 10px;
+            margin-bottom: 14px;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .saved-header h2 { font-size: 20px; font-weight: 700; }
+        .saved-header h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
         .saved-book-card {
-            background: white; border-radius: 12px; padding: 16px;
-            margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white; border-radius: 10px; padding: 16px 18px;
+            margin-bottom: 10px;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .saved-book-title  { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
-        .saved-book-author { font-size: 14px; color: #666; margin-bottom: 6px; }
-        .saved-book-meta   { font-size: 13px; color: #888; margin-bottom: 8px; }
+        .saved-book-title  { font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #111827; }
+        .saved-book-author { font-size: 13px; color: #6B7280; margin-bottom: 5px; }
+        .saved-book-meta   { font-size: 12px; color: #9CA3AF; margin-bottom: 8px; }
         .saved-book-notes  {
-            font-size: 13px; color: #555; background: #f8f9fa;
+            font-size: 13px; color: #6B7280; background: #F9FAFB;
             padding: 8px 10px; border-radius: 6px; margin-bottom: 10px;
+            border: 1px solid #F3F4F6;
         }
         .saved-book-actions { display: flex; gap: 8px; }
         .edit-field {
-            width: 100%; padding: 6px 8px; font-size: 14px;
-            border: 1px solid #007AFF; border-radius: 6px; margin-bottom: 6px;
-            font-family: inherit;
+            width: 100%; padding: 6px 8px; font-size: 13px;
+            border: 1px solid #1E3A5F; border-radius: 6px; margin-bottom: 6px;
+            font-family: inherit; color: #111827; outline: none;
         }
-        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
-        .empty-state div { font-size: 48px; margin-bottom: 12px; }
-        .empty-state p { font-size: 15px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #9CA3AF; }
+        .empty-state div { font-size: 36px; margin-bottom: 10px; opacity: 0.4; }
+        .empty-state p { font-size: 14px; }
     </style>
 </head>
 <body>
@@ -270,17 +348,21 @@
     <!-- Login Overlay -->
     <div id="login-overlay">
         <div class="login-box">
-            <div style="font-size:48px; margin-bottom:8px;">📚</div>
-            <h2>Book Scanner</h2>
-            <p>Sign in to access the app</p>
+            <div class="login-icon">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zm0 0A2.5 2.5 0 0 0 6.5 22H20v-3H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+                </svg>
+            </div>
+            <h2>Library Scanner</h2>
+            <p>Sign in to continue</p>
             <button class="btn-google" onclick="signInWithGoogle()">
-                <svg width="18" height="18" viewBox="0 0 18 18">
+                <svg width="17" height="17" viewBox="0 0 18 18">
                     <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
                     <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
                     <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/>
                     <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 6.294C4.672 4.169 6.656 3.58 9 3.58z"/>
                 </svg>
-                Sign in with Google
+                Continue with Google
             </button>
             <div id="login-error" class="error" style="display:none; margin-top:12px;"></div>
         </div>
@@ -289,7 +371,7 @@
     <!-- Navbar -->
     <nav class="navbar">
         <div class="navbar-container">
-            <a href="https://www.midwestattic.com/#/employee" class="nav-tab">Employee Page</a>
+            <a href="https://admin.midwestattic.com" class="nav-tab">Employee Page</a>
             <button class="nav-tab active" id="tab-scanner" onclick="showView('scanner')">Book Scanner</button>
             <button class="nav-tab" id="tab-saved" onclick="showView('saved')">Saved Books</button>
             <div class="nav-user">
@@ -303,16 +385,16 @@
     <div id="scanner-view">
         <div class="container">
             <div class="header">
-                <h1>📚 Book Scanner</h1>
-                <p class="subtitle">Scan or search to categorize books</p>
+                <h1>Book Scanner</h1>
+                <p class="subtitle">Scan or search to categorize books for the library</p>
             </div>
 
             <div class="button-group">
-                <button class="btn-primary" onclick="startScanner()">📷 Scan Barcode</button>
-                <button class="btn-primary" onclick="triggerCoverCapture()">📸 Scan Cover</button>
+                <button class="btn-primary" onclick="startScanner()">Scan Barcode</button>
+                <button class="btn-primary" onclick="triggerCoverCapture()">Scan Cover</button>
             </div>
             <div class="button-group" style="margin-top:-4px;">
-                <button class="btn-secondary" onclick="showSearch()">🔍 Manual Search</button>
+                <button class="btn-secondary" onclick="showSearch()">Manual Search</button>
             </div>
             <input type="file" id="cover-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCoverCapture(event)">
 
@@ -334,11 +416,11 @@
     <!-- Saved Books View -->
     <div id="saved-view" style="display:none;">
         <div class="saved-header">
-            <h2>📖 Saved Books</h2>
+            <h2>Saved Books</h2>
             <button class="btn-primary btn-sm" onclick="openManualAdd()">+ Add Manually</button>
         </div>
         <div id="saved-books-list">
-            <div class="empty-state"><div>📚</div><p>No saved books yet.</p></div>
+            <div class="empty-state"><div>&#9776;</div><p>No saved books yet.</p></div>
         </div>
     </div>
 
@@ -355,7 +437,7 @@
     <div class="modal" id="save-modal">
         <div class="modal-content">
             <button class="close-modal" onclick="closeSaveModal()">×</button>
-            <div class="modal-header" id="save-modal-title">💾 Save Book to Library</div>
+            <div class="modal-header" id="save-modal-title">Save Book to Library</div>
             <div class="form-group">
                 <label>Title</label>
                 <input type="text" id="save-title" placeholder="Book title">
@@ -382,7 +464,7 @@
             <input type="hidden" id="save-description" value="">
             <div style="display:flex; gap:8px; margin-top:8px;">
                 <button class="btn-secondary" style="flex:1;" onclick="closeSaveModal()">Cancel</button>
-                <button class="btn-primary" style="flex:2;" onclick="confirmSave()">💾 Save to Library</button>
+                <button class="btn-primary" style="flex:2;" onclick="confirmSave()">Save to Library</button>
             </div>
         </div>
     </div>
@@ -418,19 +500,43 @@
         // ===================================
         // Auth
         // ===================================
-        auth.onAuthStateChanged(user => {
-            currentUser = user;
+        auth.onAuthStateChanged(async user => {
             if (user) {
+                console.log('AUTH: user signed in:', user.email);
+                // Check allowlist before granting access
+                try {
+                    console.log('AUTH: checking allowlist for', user.email);
+                    const doc = await db.collection('allowedUsers').doc(user.email).get();
+                    console.log('AUTH: doc exists?', doc.exists);
+                    if (!doc.exists) {
+                        await auth.signOut();
+                        const el = document.getElementById('login-error');
+                        el.textContent = 'Your account is not authorized. Contact an administrator to request access.';
+                        el.style.display = 'block';
+                        return;
+                    }
+                } catch (err) {
+                    console.error('AUTH: allowlist check error:', err.code, err.message);
+                    await auth.signOut();
+                    const el = document.getElementById('login-error');
+                    el.textContent = 'Unable to verify account access. Please try again.';
+                    el.style.display = 'block';
+                    return;
+                }
+                currentUser = user;
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('user-info').textContent = user.email;
             } else {
+                currentUser = null;
                 document.getElementById('login-overlay').style.display = 'flex';
             }
         });
 
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
             auth.signInWithPopup(provider).catch(err => {
+                console.error('POPUP ERROR:', err.code, err.message);
                 const el = document.getElementById('login-error');
                 el.textContent = err.message;
                 el.style.display = 'block';
@@ -465,6 +571,16 @@
         let scanInProgress    = false;
         let scanCounts        = {};
         const REQUIRED_CONFIRMATIONS = 3;
+
+        // ===================================
+        // Fetch with timeout helper
+        // ===================================
+        function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, {...options, signal: controller.signal})
+                .finally(() => clearTimeout(timer));
+        }
 
         // ===================================
         // Directory
@@ -590,6 +706,15 @@
         async function handleCoverCapture(event) {
             const file = event.target.files[0];
             if (!file) return;
+            const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                showError('Unsupported image format. Please use JPEG, PNG, or WebP.');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                showError('Image is too large (max 5 MB). Please use a smaller photo.');
+                return;
+            }
             showStatus('Reading cover...');
             const reader = new FileReader();
             reader.onload = async function(e) {
@@ -598,11 +723,15 @@
                 const mimeType   = meta.match(/:(.*?);/)[1];
                 try {
                     showStatus('Identifying book from cover...');
-                    const response = await fetch(COVER_FUNCTION_URL, {
+                    const idToken = await currentUser.getIdToken();
+                    const response = await fetchWithTimeout(COVER_FUNCTION_URL, {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${idToken}`
+                        },
                         body: JSON.stringify({imageBase64, mimeType})
-                    });
+                    }, 30000);
                     const data = await response.json();
                     if (!response.ok || !data.title) {
                         showError('Could not identify book from cover. Try a clearer photo or use Manual Search.');
@@ -615,12 +744,12 @@
                         ? `intitle:${encodeURIComponent(data.title)}+inauthor:${encodeURIComponent(data.author)}`
                         : `intitle:${encodeURIComponent(data.title)}`;
 
-                    const booksResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5`);
+                    const booksResponse = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5`);
                     const booksData     = await booksResponse.json();
                     hideStatus();
 
                     if (!booksData.items || booksData.items.length === 0) {
-                        const fallback     = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(data.title)}&maxResults=5`);
+                        const fallback     = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(data.title)}&maxResults=5`);
                         const fallbackData = await fallback.json();
                         if (!fallbackData.items || fallbackData.items.length === 0) {
                             currentScanSource = 'cover_scan';
@@ -674,7 +803,7 @@
             if (!query) return;
             showStatus('Searching...');
             try {
-                const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=5`);
+                const response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=5`);
                 const data     = await response.json();
                 hideStatus();
 
@@ -702,19 +831,23 @@
                 let data, response;
 
                 // Strategy 1: direct ISBN search
-                response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
+                response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
                 data = await response.json();
 
                 // Strategy 2: try ISBN-10 if EAN-13
                 if ((!data.items || !data.items.length) && cleanISBN.length === 13 && (cleanISBN.startsWith('978') || cleanISBN.startsWith('979'))) {
-                    const isbn10 = cleanISBN.substring(3, 12);
-                    response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}`);
+                    const isbn9 = cleanISBN.substring(3, 12);
+                    let sum = 0;
+                    for (let i = 0; i < 9; i++) { sum += parseInt(isbn9[i]) * (10 - i); }
+                    const checkDigit = (11 - (sum % 11)) % 11;
+                    const isbn10 = isbn9 + (checkDigit === 10 ? 'X' : checkDigit.toString());
+                    response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}`);
                     data = await response.json();
                 }
 
                 // Strategy 3: general query
                 if (!data.items || !data.items.length) {
-                    response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${cleanISBN}`);
+                    response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${cleanISBN}`);
                     data = await response.json();
                 }
 
@@ -728,8 +861,11 @@
                 }
 
                 currentScanSource = 'isbn_scan';
-                console.log('Found book:', data.items[0].volumeInfo.title);
-                await displayBook(data.items[0]);
+                if (data.items.length === 1) {
+                    await displayBook(data.items[0]);
+                } else {
+                    showResultsModal(data.items);
+                }
                 scanInProgress = false;
             } catch (error) {
                 hideStatus();
@@ -745,11 +881,15 @@
         async function performWebSearch(query) {
             showStatus('Searching the web...');
             try {
-                const resp = await fetch(WEB_SEARCH_FUNCTION_URL, {
+                const idToken = await currentUser.getIdToken();
+                const resp = await fetchWithTimeout(WEB_SEARCH_FUNCTION_URL, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
                     body: JSON.stringify({query}),
-                });
+                }, 15000);
                 const data = await resp.json();
                 hideStatus();
                 if (!data.results || data.results.length === 0) {
@@ -776,7 +916,7 @@
                             <div class="web-result-link">${escapeHtml(r.displayLink || r.link)}</div>
                             <div class="web-result-snippet">${escapeHtml(r.snippet || '')}</div>
                             <div style="margin-top:10px;">
-                                <button class="btn-primary btn-sm" onclick="openSaveModalFromWeb(${i})">💾 Save This</button>
+                                <button class="btn-primary btn-sm" onclick="openSaveModalFromWeb(${i})">Save This</button>
                             </div>
                         </div>
                     `).join('')}
@@ -853,7 +993,7 @@
                 subject:     suggestedSubject,
                 description: currentBook.description,
                 source:      currentScanSource,
-                modalTitle:  '💾 Save Book to Library'
+                modalTitle:  'Save Book to Library'
             };
 
             let locationsHTML = '';
@@ -909,17 +1049,17 @@
 
             document.getElementById('results').innerHTML = `
                 <div class="result-card">
-                    <div class="book-title">📖 ${escapeHtml(currentBook.title)}</div>
-                    <div class="book-author">👤 ${escapeHtml(currentBook.authors.join(', '))}</div>
-                    ${currentBook.categories.length > 0 ? `<div class="book-category">📂 ${escapeHtml(currentBook.categories[0])}</div>` : ''}
+                    <div class="book-title">${escapeHtml(currentBook.title)}</div>
+                    <div class="book-author">${escapeHtml(currentBook.authors.join(', '))}</div>
+                    ${currentBook.categories.length > 0 ? `<div class="book-category">${escapeHtml(currentBook.categories[0])}</div>` : ''}
                     <div class="description" id="description">${highlightedDesc}</div>
-                    ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">▼ Show more</button>' : ''}
+                    ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">Show more</button>' : ''}
                     ${locationsHTML}
                     <div class="save-section">
-                        <button class="btn-primary" style="width:100%;" onclick="openSaveModal()">💾 Save to Library</button>
+                        <button class="btn-primary" style="width:100%;" onclick="openSaveModal()">Save to Library</button>
                     </div>
                     <div class="price-section">
-                        <a href="https://www.amazon.com/s?k=${encodeURIComponent(currentBook.isbn)}&i=stripbooks" target="_blank" class="price-btn">💲 Check Amazon Price →</a>
+                        <a href="https://www.amazon.com/s?k=${encodeURIComponent(currentBook.isbn !== 'N/A' ? currentBook.isbn : currentBook.title + ' ' + (currentBook.authors[0] || ''))}&i=stripbooks" target="_blank" class="price-btn">💲 Check Amazon Price →</a>
                     </div>
                 </div>
             `;
@@ -930,7 +1070,7 @@
         // ===================================
         function openSaveModal() {
             if (!pendingSave) return;
-            document.getElementById('save-modal-title').textContent = pendingSave.modalTitle || '💾 Save Book to Library';
+            document.getElementById('save-modal-title').textContent = pendingSave.modalTitle || 'Save Book to Library';
             document.getElementById('save-title').value       = pendingSave.title || '';
             document.getElementById('save-author').value      = pendingSave.author || '';
             document.getElementById('save-isbn').value        = pendingSave.isbn || '';
@@ -958,7 +1098,7 @@
                 subject:     '',
                 description: r.snippet || '',
                 source:      'web_search',
-                modalTitle:  '💾 Save Book to Library'
+                modalTitle:  'Save Book to Library'
             };
             openSaveModal();
         }
@@ -1002,7 +1142,7 @@
                 await saveBook(bookData);
                 hideStatus();
                 closeSaveModal();
-                showStatus('Book saved! ✅');
+                showStatus('Book saved successfully.');
                 setTimeout(hideStatus, 2500);
             } catch (err) {
                 hideStatus();
@@ -1029,7 +1169,7 @@
             try {
                 const snap = await db.collection('savedBooks').orderBy('savedAt', 'desc').get();
                 if (snap.empty) {
-                    listEl.innerHTML = '<div class="empty-state"><div>📚</div><p>No saved books yet. Scan a book and hit Save!</p></div>';
+                    listEl.innerHTML = '<div class="empty-state"><div>&#9776;</div><p>No saved books yet. Scan a book to get started.</p></div>';
                     return;
                 }
                 listEl.innerHTML = snap.docs.map(doc => renderSavedBook(doc.id, doc.data())).join('');
@@ -1080,10 +1220,16 @@
         function editSavedBook(id) {
             const card = document.getElementById(`saved-${id}`);
             if (!card) return;
-            const currentTitle  = card.querySelector('.saved-book-title')?.textContent || '';
-            const currentAuthor = card.querySelector('.saved-book-author')?.textContent || '';
-            const notesEl       = card.querySelector('.saved-book-notes');
-            const currentNotes  = notesEl ? notesEl.textContent.replace(/^📝\s*/, '') : '';
+            const currentTitle   = card.querySelector('.saved-book-title')?.textContent || '';
+            const currentAuthor  = card.querySelector('.saved-book-author')?.textContent || '';
+            const notesEl        = card.querySelector('.saved-book-notes');
+            const currentNotes   = notesEl ? notesEl.textContent.replace(/^📝\s*/, '') : '';
+            const currentSubject = card.querySelector('.saved-book-meta strong')?.textContent || '';
+
+            const subjects = [...new Set(directory.map(e => e.subject))].sort();
+            const subjectOptions = subjects.map(s =>
+                `<option value="${escapeHtml(s)}"${s === currentSubject ? ' selected' : ''}>${escapeHtml(s)}</option>`
+            ).join('');
 
             card.innerHTML = `
                 <div class="form-group">
@@ -1093,6 +1239,13 @@
                 <div class="form-group">
                     <label>Author</label>
                     <input class="edit-field" id="edit-author-${id}" value="${escapeHtml(currentAuthor)}">
+                </div>
+                <div class="form-group">
+                    <label>Subject / Shelf Location</label>
+                    <select class="edit-field" id="edit-subject-${id}">
+                        <option value="">-- No subject --</option>
+                        ${subjectOptions}
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>Notes</label>
@@ -1106,12 +1259,20 @@
         }
 
         async function submitEditSavedBook(id) {
-            const title  = document.getElementById(`edit-title-${id}`).value.trim();
-            const author = document.getElementById(`edit-author-${id}`).value.trim();
-            const notes  = document.getElementById(`edit-notes-${id}`).value.trim();
+            const title   = document.getElementById(`edit-title-${id}`).value.trim();
+            const author  = document.getElementById(`edit-author-${id}`).value.trim();
+            const subject = document.getElementById(`edit-subject-${id}`).value;
+            const notes   = document.getElementById(`edit-notes-${id}`).value.trim();
             if (!title) { alert('Title is required.'); return; }
+            const entry = directory.find(e => e.subject === subject);
+            const updates = {
+                title, author, notes, subject,
+                floor: entry ? entry.floor : '',
+                aisle: entry ? entry.aisle : '',
+                room:  entry ? entry.room  : '',
+            };
             try {
-                await updateSavedBook(id, {title, author, notes});
+                await updateSavedBook(id, updates);
                 loadSavedBooks();
             } catch (err) {
                 alert('Update failed: ' + err.message);
@@ -1140,11 +1301,15 @@
         // ===================================
         async function classifyBookWithAI(title, description) {
             const subjects = directory.map(entry => entry.subject);
-            const response = await fetch(CLOUD_FUNCTION_URL, {
+            const idToken = await currentUser.getIdToken();
+            const response = await fetchWithTimeout(CLOUD_FUNCTION_URL, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
                 body: JSON.stringify({title, description, subjects})
-            });
+            }, 30000);
             if (!response.ok) {
                 const errorData = await response.json();
                 if (errorData.useFallback) return null;

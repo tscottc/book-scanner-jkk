@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Returns true only if the signed-in user's email exists in allowedUsers
+    function isAllowed() {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
+    }
+
+    // allowedUsers — managed from the Firebase Console only.
+    // Each document ID is the user's email address.
+    // Users can read their own doc (so the app can check access),
+    // but nobody can write from the client.
+    match /allowedUsers/{email} {
+      allow read:  if request.auth != null && request.auth.token.email == email;
+      allow write: if false;
+    }
+
+    // savedBooks — shared library visible to all allowed users.
+    // Any allowed user can create a record, but only allowed users
+    // can read, update, or delete.
+    match /savedBooks/{docId} {
+      allow read:             if isAllowed();
+      allow create:           if isAllowed();
+      allow update, delete:   if isAllowed();
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
