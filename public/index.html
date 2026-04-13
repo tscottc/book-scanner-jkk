@@ -881,13 +881,17 @@
         function adaptOpenLibraryDoc(doc) {
             const isbn = (doc.isbn || [])[0] || '';
             const fs = doc.first_sentence;
-            const description = fs ? (typeof fs === 'string' ? fs : (fs.value || '')) : '';
+            const firstSentence = fs ? (typeof fs === 'string' ? fs : (fs.value || '')) : '';
+            const subjects = (doc.subject || []).slice(0, 20);
+            // Build description: first sentence + subject tags so AI has enough to classify
+            const description = [firstSentence, subjects.length ? 'Subjects: ' + subjects.join(', ') : '']
+                .filter(Boolean).join(' ') || '';
             return {
                 volumeInfo: {
                     title:       doc.title || 'Unknown Title',
                     authors:     doc.author_name || ['Unknown Author'],
                     description: description,
-                    categories:  (doc.subject || []).slice(0, 5),
+                    categories:  subjects,
                     industryIdentifiers: isbn ? [{ type: 'ISBN_13', identifier: isbn }] : [],
                 }
             };
@@ -1150,11 +1154,17 @@
 
             showStatus('Analyzing book with AI...');
             let aiMatch = null;
-            if (USE_AI_CLASSIFICATION && currentBook.description && currentBook.description !== 'No description available.') {
-                try {
-                    aiMatch = await classifyBookWithAI(currentBook.title, currentBook.description);
-                } catch (error) {
-                    console.warn('AI classification failed, falling back to keyword matching:', error);
+            if (USE_AI_CLASSIFICATION) {
+                // Use description if available, otherwise fall back to subject categories
+                const classifyText = (currentBook.description && currentBook.description !== 'No description available.')
+                    ? currentBook.description
+                    : currentBook.categories.join(', ');
+                if (classifyText) {
+                    try {
+                        aiMatch = await classifyBookWithAI(currentBook.title, classifyText);
+                    } catch (error) {
+                        console.warn('AI classification failed, falling back to keyword matching:', error);
+                    }
                 }
             }
             hideStatus();
