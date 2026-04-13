@@ -904,12 +904,19 @@
             }
         }
 
-        function renderWebResults(results, query) {
+        async function renderWebResults(results, query) {
             window._webResults = results;
-            const html = `
+            window._webAiMatch = null;
+
+            // Render immediately with AI loading state at top
+            document.getElementById('results').innerHTML = `
                 <div class="result-card">
-                    <div class="book-title">🌐 Web Results</div>
-                    <div class="book-author" style="margin-bottom:12px;">No book database entry found — here are web matches:</div>
+                    <div id="web-ai-section">
+                        <div class="locations">
+                            <div class="locations-title">🤖 Classifying with AI...</div>
+                        </div>
+                    </div>
+                    <div class="book-author" style="margin:12px 0 8px; font-size:13px; color:#6B7280;">Not found in book database — confirm the right match below:</div>
                     ${results.map((r, i) => `
                         <div class="web-result-card">
                             <div class="web-result-title">${escapeHtml(r.title)}</div>
@@ -922,7 +929,39 @@
                     `).join('')}
                 </div>
             `;
-            document.getElementById('results').innerHTML = html;
+
+            // Run AI classification using title + combined snippets from top results
+            if (USE_AI_CLASSIFICATION && results.length > 0) {
+                try {
+                    const combinedText = results.slice(0, 3).map(r => r.snippet || '').filter(Boolean).join(' ');
+                    const match = await classifyBookWithAI(results[0].title, combinedText || results[0].title);
+                    window._webAiMatch = match;
+                    const aiSection = document.getElementById('web-ai-section');
+                    if (aiSection) {
+                        if (match) {
+                            aiSection.innerHTML = `
+                                <div class="locations">
+                                    <div class="locations-title">🤖 AI Classification <span class="method-badge badge-ai">Gemini AI</span></div>
+                                    <div class="location-item ai-result">
+                                        <div class="location-subject">🎯 ${escapeHtml(match.subject)}</div>
+                                        <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
+                                        <div class="location-matches">Analyzed by Google Gemini AI</div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            aiSection.innerHTML = '';
+                        }
+                    }
+                } catch (e) {
+                    console.warn('AI classification failed for web results:', e);
+                    const aiSection = document.getElementById('web-ai-section');
+                    if (aiSection) aiSection.innerHTML = '';
+                }
+            } else {
+                const aiSection = document.getElementById('web-ai-section');
+                if (aiSection) aiSection.innerHTML = '';
+            }
         }
 
         // ===================================
@@ -1091,19 +1130,21 @@
         async function openSaveModalFromWeb(index) {
             const r = (window._webResults || [])[index];
             if (!r) return;
+            // Use cached AI match from renderWebResults if available
+            const cachedMatch = window._webAiMatch;
             pendingSave = {
                 title:       r.title,
                 author:      '',
                 isbn:        '',
-                subject:     '',
+                subject:     cachedMatch ? cachedMatch.subject : '',
                 description: r.snippet || '',
                 source:      currentScanSource || 'web_search',
                 modalTitle:  'Save Book to Library'
             };
             openSaveModal();
 
-            // Classify with AI in background using title + snippet as the description
-            if (USE_AI_CLASSIFICATION && r.title) {
+            // Only re-classify if renderWebResults hasn't produced a result yet
+            if (!cachedMatch && USE_AI_CLASSIFICATION && r.title) {
                 try {
                     const match = await classifyBookWithAI(r.title, r.snippet || r.title);
                     if (match) {
