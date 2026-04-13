@@ -763,6 +763,19 @@
                         const fallback     = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(data.title)}&maxResults=5`);
                         const fallbackData = await fallback.json();
                         if (!fallbackData.items || fallbackData.items.length === 0) {
+                            debugLog(`Google Books cover fallback failed → trying Open Library`);
+                            try {
+                                const olResults = await openLibraryTextSearch(null, data.title, data.author);
+                                if (olResults.length > 0) {
+                                    currentScanSource = 'cover_scan';
+                                    olResults.length === 1
+                                        ? displayBook(olResults[0])
+                                        : showResultsModal(olResults);
+                                    return;
+                                }
+                            } catch (olErr) {
+                                debugLog(`OL cover error: ${olErr.message}`);
+                            }
                             currentScanSource = 'cover_scan';
                             await performWebSearch(`${data.title} ${data.author || ''} book`);
                             return;
@@ -819,6 +832,18 @@
                 hideStatus();
 
                 if (!data.items || data.items.length === 0) {
+                    debugLog(`Google Books text search failed (${response.status}) → trying Open Library`);
+                    try {
+                        const olResults = await openLibraryTextSearch(query);
+                        if (olResults.length > 0) {
+                            currentScanSource = 'book_search';
+                            if (olResults.length === 1) { displayBook(olResults[0]); hideSearch(); }
+                            else showResultsModal(olResults);
+                            return;
+                        }
+                    } catch (olErr) {
+                        debugLog(`OL search error: ${olErr.message}`);
+                    }
                     currentScanSource = 'web_search';
                     await performWebSearch(`${query} book`);
                     return;
@@ -832,6 +857,66 @@
                 showError('Search failed. Please check your connection.');
                 console.error('Search error:', error);
             }
+        }
+
+        // ===================================
+        // Open Library Fallback
+        // ===================================
+        function adaptOpenLibraryBook(book, isbn) {
+            const notes = book.notes;
+            const description = notes
+                ? (typeof notes === 'string' ? notes : (notes.value || ''))
+                : '';
+            return {
+                volumeInfo: {
+                    title:       book.title || 'Unknown Title',
+                    authors:     (book.authors || []).map(a => a.name),
+                    description: description,
+                    categories:  (book.subjects || []).slice(0, 5).map(s => typeof s === 'string' ? s : s.name),
+                    industryIdentifiers: [{ type: 'ISBN_13', identifier: isbn }],
+                }
+            };
+        }
+
+        function adaptOpenLibraryDoc(doc) {
+            const isbn = (doc.isbn || [])[0] || '';
+            const fs = doc.first_sentence;
+            const description = fs ? (typeof fs === 'string' ? fs : (fs.value || '')) : '';
+            return {
+                volumeInfo: {
+                    title:       doc.title || 'Unknown Title',
+                    authors:     doc.author_name || ['Unknown Author'],
+                    description: description,
+                    categories:  (doc.subject || []).slice(0, 5),
+                    industryIdentifiers: isbn ? [{ type: 'ISBN_13', identifier: isbn }] : [],
+                }
+            };
+        }
+
+        async function openLibraryISBNLookup(isbn) {
+            debugLog(`OL: looking up ISBN ${isbn}`);
+            const url = `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`;
+            const response = await fetchWithTimeout(url, {}, 15000);
+            const data = await response.json();
+            const book = data[`ISBN:${isbn}`];
+            if (!book) { debugLog(`OL: not found`); return null; }
+            debugLog(`OL: found "${book.title}"`);
+            return adaptOpenLibraryBook(book, isbn);
+        }
+
+        async function openLibraryTextSearch(query, title, author) {
+            let url;
+            if (title) {
+                url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}${author ? '&author=' + encodeURIComponent(author) : ''}&limit=5&fields=key,title,author_name,isbn,subject,first_sentence`;
+            } else {
+                url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=5&fields=key,title,author_name,isbn,subject,first_sentence`;
+            }
+            debugLog(`OL search: ${title || query}`);
+            const response = await fetchWithTimeout(url, {}, 15000);
+            const data = await response.json();
+            if (!data.docs || !data.docs.length) { debugLog(`OL search: no results`); return []; }
+            debugLog(`OL search: ${data.docs.length} result(s)`);
+            return data.docs.map(adaptOpenLibraryDoc);
         }
 
         async function searchByISBN(isbn) {
@@ -874,7 +959,29 @@
                 hideStatus();
 
                 if (!data.items || !data.items.length) {
-                    debugLog(`All strategies failed → web search`);
+                    // Try Open Library before giving up (handles Google Books quota errors)
+                    debugLog(`Google Books failed → trying Open Library`);
+                    try {
+                        let olBook = await openLibraryISBNLookup(cleanISBN);
+                        if (!olBook && cleanISBN.length === 13) {
+                            // Also try the ISBN-10 on Open Library
+                            const isbn9 = cleanISBN.substring(3, 12);
+                            let sum = 0;
+                            for (let i = 0; i < 9; i++) { sum += parseInt(isbn9[i]) * (10 - i); }
+                            const checkDigit = (11 - (sum % 11)) % 11;
+                            const isbn10 = isbn9 + (checkDigit === 10 ? 'X' : checkDigit.toString());
+                            olBook = await openLibraryISBNLookup(isbn10);
+                        }
+                        if (olBook) {
+                            currentScanSource = 'isbn_scan';
+                            await displayBook(olBook);
+                            scanInProgress = false;
+                            return;
+                        }
+                    } catch (olErr) {
+                        debugLog(`OL error: ${olErr.message}`);
+                    }
+                    debugLog(`All sources failed → web search`);
                     scanInProgress = false;
                     currentScanSource = 'isbn_scan';
                     await performWebSearch(`ISBN ${cleanISBN} book`);
