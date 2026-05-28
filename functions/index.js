@@ -116,13 +116,12 @@ function generatePrompt(title, description, subjects) {
     `match books to the correct library shelf subject category.
 
 CRITICAL INSTRUCTIONS:
-1. You MUST return EXACTLY ONE subject from the provided list below
-2. Return ONLY the subject name, with no additional text, punctuation, ` +
-    `or explanation
-3. Choose the MOST SPECIFIC subject that matches the book's content
-4. If multiple subjects could apply, choose the most relevant one
-5. The subject you return must EXACTLY match one from the list ` +
-    `(case-sensitive)
+1. You MUST return valid JSON with exactly two fields: "subject" and "reasoning"
+2. "subject" must EXACTLY match one subject from the list below (case-sensitive)
+3. "reasoning" must be one concise sentence (under 20 words) explaining why ` +
+    `you chose that subject over alternatives
+4. Choose the MOST SPECIFIC subject that matches the book's content
+5. Return ONLY the JSON object, no markdown, no extra text
 
 AVAILABLE SUBJECTS:
 ${subjectsList}
@@ -131,7 +130,9 @@ BOOK TO CLASSIFY:
 Title: ${title}
 Description: ${description}
 
-Return ONLY the matching subject name:`;
+Return ONLY valid JSON, for example: ` +
+    `{"subject": "Photography", "reasoning": "Book is a how-to guide on ` +
+    `camera techniques, not art history."}:`;
 }
 
 /**
@@ -171,14 +172,28 @@ async function analyzeBookWithRetry(
         timeoutPromise,
       ]);
 
-      let subject = result.text.trim();
+      let rawText = result.text.trim();
 
-      // Clean up any extra punctuation or quotes
-      subject = subject.replace(/^["']|["']$/g, "");
-      subject = subject.replace(/\.$/, "");
+      // Strip markdown code fences if present
+      rawText = rawText.replace(/^```(?:json)?\s*/i, "");
+      rawText = rawText.replace(/\s*```$/, "");
+
+      if (!rawText) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch (_) {
+        throw new Error("Gemini returned non-JSON response");
+      }
+
+      let subject = (parsed.subject || "").trim();
+      const reasoning = (parsed.reasoning || "").trim();
 
       if (!subject) {
-        throw new Error("Empty response from Gemini");
+        throw new Error("Empty subject in Gemini response");
       }
 
       // Validate that the subject is in our list
@@ -201,7 +216,7 @@ async function analyzeBookWithRetry(
       }
 
       logger.info(`Successfully analyzed book: "${subject}"`);
-      return subject;
+      return {subject, reasoning};
     } catch (error) {
       logger.warn(`Attempt ${attempt + 1} failed:`, error.message);
 
@@ -284,7 +299,7 @@ exports.getBookTopic = onRequest(
 
       try {
         // Analyze the book
-        const subject = await analyzeBookWithRetry(
+        const result = await analyzeBookWithRetry(
             title,
             description,
             subjects,
@@ -292,7 +307,8 @@ exports.getBookTopic = onRequest(
 
         // Return success response
         res.status(200).json({
-          subject,
+          subject: result.subject,
+          reasoning: result.reasoning,
           timestamp: new Date().toISOString(),
         });
       } catch (error) {

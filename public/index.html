@@ -2,345 +2,759 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Book Scanner</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <!-- Firebase compat SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary:       #1E3A5F;
+            --primary-dark:  #162D4A;
+            --primary-light: #EEF4FB;
+            --accent:        #2563EB;
+            --accent-light:  #EFF6FF;
+            --success:       #16A34A;
+            --success-light: #F0FDF4;
+            --danger:        #DC2626;
+            --danger-light:  #FEF2F2;
+            --bg:            #F0F3F7;
+            --surface:       #FFFFFF;
+            --border:        #E2E8F0;
+            --border-light:  #F1F5F9;
+            --text-1:        #0F172A;
+            --text-2:        #475569;
+            --text-3:        #94A3B8;
+            --header-h:      56px;
+            --nav-h:         64px;
+            --r-sm:          8px;
+            --r-md:          12px;
+            --r-lg:          16px;
+            --shadow-sm:     0 1px 2px rgba(0,0,0,0.05), 0 1px 4px rgba(0,0,0,0.04);
+            --shadow-md:     0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-lg:     0 8px 28px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        *, *::before, *::after {
+            margin: 0; padding: 0; box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html { height: 100%; }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #F7F8FA;
-            padding: 0;
-            padding-bottom: 80px;
-            color: #111827;
+            background: var(--bg);
+            color: var(--text-1);
             -webkit-font-smoothing: antialiased;
+            min-height: 100%;
+            padding-top: var(--header-h);
+            padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
         }
 
-        /* ---- Login overlay ---- */
+        /* ============================
+           LOGIN OVERLAY
+        ============================ */
         #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #F7F8FA;
-            z-index: 9999; display: flex; justify-content: center; align-items: center;
+            position: fixed; inset: 0;
+            background: var(--bg);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
         }
         .login-box {
-            background: white;
-            border-radius: 12px;
-            padding: 48px 40px;
+            background: var(--surface);
+            border-radius: var(--r-lg);
+            padding: 44px 32px 36px;
             text-align: center;
-            max-width: 380px;
-            width: 90%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 8px 28px rgba(0,0,0,0.09);
-            border: 1px solid #E5E7EB;
+            max-width: 360px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
         }
-        .login-icon {
-            width: 48px; height: 48px;
-            background: #1E3A5F;
-            border-radius: 10px;
-            margin: 0 auto 20px;
+        .login-logo {
+            width: 60px; height: 60px;
+            background: var(--primary);
+            border-radius: 15px;
+            margin: 0 auto 24px;
             display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 14px rgba(30,58,95,0.35);
         }
-        .login-icon svg { width: 26px; height: 26px; fill: white; }
+        .login-logo svg { width: 30px; height: 30px; fill: white; }
         .login-box h2 {
-            font-size: 20px; font-weight: 700; margin-bottom: 6px;
-            color: #111827; letter-spacing: -0.3px;
+            font-size: 22px; font-weight: 800;
+            letter-spacing: -0.5px; margin-bottom: 8px;
+            color: var(--text-1);
         }
-        .login-box p { color: #6B7280; margin-bottom: 28px; font-size: 14px; }
+        .login-box p {
+            color: var(--text-3); font-size: 14px;
+            margin-bottom: 32px; line-height: 1.55;
+        }
         .btn-google {
             display: flex; align-items: center; justify-content: center; gap: 10px;
-            width: 100%; padding: 10px 18px; background: white;
-            border: 1px solid #D1D5DB;
-            border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
-            transition: all 0.15s; color: #374151; font-family: inherit;
+            width: 100%; padding: 13px 20px;
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: var(--r-sm);
+            font-size: 14px; font-weight: 600;
+            cursor: pointer; color: var(--text-1);
+            font-family: inherit;
+            transition: all 0.15s ease;
+            letter-spacing: -0.1px;
         }
-        .btn-google:hover {
-            background: #F9FAFB; border-color: #9CA3AF;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+        .btn-google:hover { background: var(--border-light); border-color: #CBD5E1; }
+        .btn-google:active { transform: scale(0.98); }
+        #login-error {
+            background: var(--danger-light);
+            color: var(--danger);
+            border: 1px solid #FECACA;
+            border-radius: var(--r-sm);
+            padding: 12px 14px;
+            font-size: 13px;
+            margin-top: 16px;
+            text-align: left;
+            line-height: 1.45;
         }
 
-        /* ---- Navbar ---- */
-        .navbar {
-            background: white;
-            border-bottom: 1px solid #E5E7EB;
-            position: sticky; top: 0; z-index: 100;
+        /* ============================
+           TOP HEADER
+        ============================ */
+        .app-header {
+            position: fixed; top: 0; left: 0; right: 0;
+            height: var(--header-h);
+            background: var(--primary);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 10px;
         }
-        .navbar-container {
-            max-width: 700px; margin: 0 auto; display: flex; padding: 0; align-items: stretch;
+        .header-logo {
+            width: 34px; height: 34px;
+            background: rgba(255,255,255,0.12);
+            border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
         }
-        .nav-tab {
-            flex: 1; padding: 14px 16px; text-align: center; text-decoration: none;
-            color: #6B7280; font-weight: 500; font-size: 13px;
-            border-bottom: 2px solid transparent; transition: all 0.15s;
-            background: white; border: none; border-bottom: 2px solid transparent;
-            cursor: pointer; font-family: inherit;
+        .header-logo svg { width: 19px; height: 19px; fill: white; }
+        .header-title {
+            font-size: 17px; font-weight: 700;
+            color: white; letter-spacing: -0.3px;
+            flex: 1;
         }
-        .nav-tab:hover { color: #1E3A5F; background: #F9FAFB; }
-        .nav-tab.active { color: #1E3A5F; border-bottom-color: #1E3A5F; font-weight: 600; }
-        .nav-user {
-            display: flex; align-items: center; gap: 6px;
-            padding: 8px 12px; border-left: 1px solid #E5E7EB; flex-shrink: 0;
+        .header-user {
+            display: flex; align-items: center; gap: 8px;
         }
         #user-info {
-            font-size: 11px; color: #9CA3AF; max-width: 90px;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-size: 11px; color: rgba(255,255,255,0.55);
+            max-width: 96px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
         }
         .btn-signout {
-            flex: none; font-size: 11px; padding: 4px 10px;
-            background: white; color: #6B7280; border-radius: 6px;
-            border: 1px solid #D1D5DB; cursor: pointer; font-weight: 500;
-            font-family: inherit; transition: all 0.15s;
-        }
-        .btn-signout:hover { background: #F9FAFB; color: #374151; }
-
-        /* ---- Main container ---- */
-        .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
-
-        .header {
-            background: white; padding: 20px 22px; border-radius: 10px;
-            margin-bottom: 16px;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-        h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.3px; }
-        .subtitle { color: #6B7280; font-size: 13px; }
-
-        .button-group { display: flex; gap: 10px; margin-bottom: 10px; }
-
-        button {
-            flex: 1; padding: 13px 16px; font-size: 14px; font-weight: 500;
-            border: none; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+            font-size: 12px; padding: 6px 13px;
+            background: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.85);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.22);
+            cursor: pointer; font-weight: 600;
             font-family: inherit;
+            transition: background 0.15s;
+            letter-spacing: -0.1px;
         }
-        .btn-primary { background: #1E3A5F; color: white; }
-        .btn-primary:hover { background: #162D4A; }
-        .btn-primary:active { background: #0F1F33; }
-        .btn-secondary {
-            background: white; color: #374151;
-            border: 1px solid #D1D5DB;
-        }
-        .btn-secondary:hover { background: #F9FAFB; border-color: #9CA3AF; }
-        .btn-secondary:active { background: #F3F4F6; }
-        .btn-danger { background: white; color: #B91C1C; border: 1px solid #FECACA; }
-        .btn-danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
-        .btn-sm { padding: 7px 12px; font-size: 12px; border-radius: 6px; flex: none; }
+        .btn-signout:hover { background: rgba(255,255,255,0.22); }
 
-        /* ---- Scanner ---- */
-        #scanner-container {
-            display: none; background: white; border-radius: 10px;
-            padding: 16px; margin-bottom: 16px;
-            border: 1px solid #E5E7EB;
+        /* ============================
+           BOTTOM NAV
+        ============================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 100;
+            box-shadow: 0 -1px 0 var(--border), 0 -4px 16px rgba(0,0,0,0.05);
         }
-        #reader { width: 100%; border-radius: 6px; overflow: hidden; position: relative; }
+        .nav-tab {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 5px;
+            border: none; background: none;
+            cursor: pointer; font-family: inherit;
+            color: var(--text-3);
+            transition: color 0.15s;
+            padding: 0; text-decoration: none;
+        }
+        .nav-tab:active { opacity: 0.65; }
+        .nav-tab.active { color: var(--primary); }
+        .nav-icon {
+            width: 24px; height: 24px;
+        }
+        .nav-label {
+            font-size: 10px; font-weight: 700;
+            letter-spacing: 0.3px; text-transform: uppercase;
+        }
+        /* active indicator dot */
+        .nav-tab.active .nav-label::after {
+            content: '';
+            display: block;
+            width: 4px; height: 4px;
+            background: var(--primary);
+            border-radius: 50%;
+            margin: 3px auto 0;
+        }
+
+        /* ============================
+           SCROLL CONTENT AREA
+        ============================ */
+        .scroll-content {
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 20px 16px 28px;
+        }
+
+        /* ============================
+           SCAN ACTION TILES
+        ============================ */
+        .scan-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .scan-tile {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 16px 18px;
+            border-radius: var(--r-md);
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            text-align: left;
+            transition: all 0.15s ease;
+            box-shadow: var(--shadow-sm);
+        }
+        .scan-tile:active { transform: scale(0.98); box-shadow: none; }
+
+        .scan-tile-primary {
+            background: var(--primary);
+            border: 1.5px solid transparent;
+        }
+        .scan-tile-primary:hover { background: var(--primary-dark); }
+
+        .scan-tile-secondary {
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+        }
+        .scan-tile-secondary:hover { background: var(--border-light); border-color: #CBD5E1; }
+
+        .tile-icon {
+            width: 42px; height: 42px;
+            border-radius: var(--r-sm);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .scan-tile-primary .tile-icon { background: rgba(255,255,255,0.15); }
+        .scan-tile-secondary .tile-icon { background: var(--primary-light); }
+
+        .tile-icon svg {
+            width: 21px; height: 21px;
+        }
+        .scan-tile-primary .tile-icon svg { stroke: white; fill: none; }
+        .scan-tile-secondary .tile-icon svg { stroke: var(--primary); fill: none; }
+
+        .tile-text { flex: 1; }
+        .tile-label {
+            font-size: 15px; font-weight: 700;
+            letter-spacing: -0.2px;
+            margin-bottom: 2px;
+        }
+        .scan-tile-primary .tile-label { color: white; }
+        .scan-tile-secondary .tile-label { color: var(--text-1); }
+
+        .tile-desc { font-size: 12px; }
+        .scan-tile-primary .tile-desc { color: rgba(255,255,255,0.65); }
+        .scan-tile-secondary .tile-desc { color: var(--text-3); }
+
+        .tile-chevron { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.4; }
+        .scan-tile-primary .tile-chevron { stroke: white; fill: none; }
+        .scan-tile-secondary .tile-chevron { stroke: var(--text-2); fill: none; }
+
+        /* ============================
+           CAMERA SCANNER CONTAINER
+        ============================ */
+        #scanner-container {
+            display: none;
+            background: var(--surface);
+            border-radius: var(--r-md);
+            overflow: hidden;
+            margin-bottom: 16px;
+            border: 1.5px solid var(--border);
+            box-shadow: var(--shadow-md);
+        }
+        .scanner-header {
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .scanner-header-title {
+            font-size: 14px; font-weight: 600; color: var(--text-1); flex: 1;
+        }
+        #reader { width: 100%; position: relative; background: #000; min-height: 200px; }
         #reader video { width: 100%; height: auto; display: block; }
         #reader canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         #reader canvas.drawingBuffer { position: absolute; top: 0; left: 0; }
+        .scanner-footer { padding: 12px 14px; }
 
-        /* ---- Search ---- */
-        .search-container {
-            display: none; background: white; border-radius: 10px;
-            padding: 16px; margin-bottom: 16px;
-            border: 1px solid #E5E7EB;
+        /* ============================
+           SEARCH CONTAINER
+        ============================ */
+        #search-container {
+            display: none;
+            background: var(--surface);
+            border-radius: var(--r-md);
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1.5px solid var(--border);
+            box-shadow: var(--shadow-md);
+        }
+        .search-label {
+            font-size: 11px; font-weight: 700;
+            color: var(--text-3); margin-bottom: 10px;
+            text-transform: uppercase; letter-spacing: 0.7px;
         }
         .search-input {
-            width: 100%; padding: 10px 12px; font-size: 14px;
-            border: 1px solid #D1D5DB; border-radius: 7px; margin-bottom: 10px;
-            font-family: inherit; color: #111827; outline: none;
-            transition: border-color 0.15s;
+            width: 100%; padding: 12px 14px;
+            font-size: 15px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--r-sm);
+            font-family: inherit;
+            color: var(--text-1); outline: none;
+            background: var(--bg);
+            transition: border-color 0.15s, box-shadow 0.15s;
+            margin-bottom: 10px;
         }
-        .search-input:focus { border-color: #1E3A5F; box-shadow: 0 0 0 3px rgba(30,58,95,0.08); }
+        .search-input:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(30,58,95,0.1);
+        }
+        .search-input::placeholder { color: var(--text-3); }
+        .search-actions { display: flex; gap: 8px; }
 
-        /* ---- Result card ---- */
-        .result-card {
-            background: white; border-radius: 10px; padding: 20px;
-            margin-bottom: 14px;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        /* ============================
+           BUTTONS
+        ============================ */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 6px; padding: 12px 20px;
+            font-size: 14px; font-weight: 600;
+            border: none; border-radius: var(--r-sm);
+            cursor: pointer; font-family: inherit;
+            transition: all 0.15s ease;
+            letter-spacing: -0.1px; flex: 1;
         }
-        .book-title  { font-size: 18px; font-weight: 700; margin-bottom: 4px; color: #111827; letter-spacing: -0.2px; }
-        .book-author { font-size: 14px; color: #6B7280; margin-bottom: 12px; }
-        .book-category {
-            display: inline-block; padding: 4px 10px;
-            background: #EFF6FF; color: #1D4ED8;
-            border-radius: 5px; font-size: 12px; font-weight: 500; margin-bottom: 12px;
+        .btn:active { transform: scale(0.97); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary { background: var(--surface); color: var(--text-1); border: 1.5px solid var(--border); }
+        .btn-secondary:hover { background: var(--border-light); }
+        .btn-danger { background: var(--surface); color: var(--danger); border: 1.5px solid #FECACA; }
+        .btn-danger:hover { background: var(--danger-light); }
+        .btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 7px; flex: none; }
+        .btn-full { width: 100%; }
+
+        /* ============================
+           RESULT CARD
+        ============================ */
+        .result-card {
+            background: var(--surface);
+            border-radius: var(--r-md);
+            overflow: hidden;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Book header */
+        .result-book-header {
+            padding: 20px 20px 16px;
+        }
+        .book-genre-tag {
+            display: inline-block;
+            padding: 3px 10px;
+            background: var(--accent-light);
+            color: var(--accent);
+            border-radius: 20px;
+            font-size: 11px; font-weight: 700;
+            letter-spacing: 0.3px; text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .book-title {
+            font-size: 21px; font-weight: 800;
+            color: var(--text-1);
+            letter-spacing: -0.5px; line-height: 1.2;
+            margin-bottom: 5px;
+        }
+        .book-author {
+            font-size: 14px; color: var(--text-2); font-weight: 500;
+        }
+
+        /* Location block — the primary info */
+        .location-block {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+        }
+        .location-loading {
+            display: flex; align-items: center; gap: 10px;
+            color: var(--text-3); font-size: 13px; font-weight: 500;
+        }
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .location-card {
+            border-radius: var(--r-sm);
+            background: var(--primary-light);
+            border: 1.5px solid #C2D9F0;
+            padding: 14px 16px;
+        }
+        .location-card-row1 {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .location-eyebrow {
+            font-size: 10px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.9px;
+            color: var(--primary);
+        }
+        .ai-chip {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; padding: 2px 8px;
+            background: var(--accent); color: white;
+            border-radius: 20px;
+        }
+        .location-shelf {
+            font-size: 24px; font-weight: 800;
+            color: var(--primary); letter-spacing: -0.5px;
+            line-height: 1.1; margin-bottom: 2px;
+        }
+        .location-subject-name {
+            font-size: 14px; font-weight: 600;
+            color: var(--text-1); margin-bottom: 0;
+        }
+        .location-reasoning {
+            font-size: 12px; color: var(--text-2);
+            font-style: italic; line-height: 1.45;
+            padding-top: 8px; margin-top: 8px;
+            border-top: 1px solid #C2D9F0;
+        }
+        .location-none {
+            font-size: 13px; color: var(--text-3);
+            font-style: italic;
+        }
+
+        /* Description block */
+        .description-block {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .section-label {
+            font-size: 10px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.9px;
+            color: var(--text-3); margin-bottom: 7px;
         }
         .description {
-            color: #374151; line-height: 1.65; font-size: 14px; margin-bottom: 12px;
-            max-height: 80px; overflow: hidden; transition: max-height 0.3s;
+            color: var(--text-2); line-height: 1.65;
+            font-size: 13px;
+            max-height: 72px; overflow: hidden;
+            transition: max-height 0.3s ease;
         }
         .description.expanded { max-height: none; }
-        .description mark { background: #FEF9C3; padding: 1px 3px; border-radius: 2px; font-weight: 500; }
         .expand-btn {
-            color: #1E3A5F; font-size: 13px; cursor: pointer;
-            background: none; border: none; padding: 4px 0; font-family: inherit; font-weight: 500;
+            color: var(--accent); font-size: 12px; font-weight: 600;
+            cursor: pointer; background: none; border: none;
+            padding: 5px 0 0; font-family: inherit;
         }
 
-        /* ---- Locations ---- */
-        .locations { margin-top: 16px; padding-top: 16px; border-top: 1px solid #F3F4F6; }
-        .locations-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #374151; }
-        .location-item {
-            padding: 12px 14px; background: #F9FAFB; border-radius: 7px;
-            margin-bottom: 8px; border-left: 3px solid #6B7280;
-            border: 1px solid #E5E7EB; border-left: 3px solid #6B7280;
+        /* Action buttons */
+        .result-actions {
+            padding: 14px 20px;
+            display: flex; flex-direction: column; gap: 9px;
         }
-        .location-item.primary  { background: #F0FDF4; border-color: #BBF7D0; border-left-color: #16A34A; }
-        .location-item.ai-result {
-            background: #EFF6FF; border-color: #BFDBFE; border-left: 3px solid #2563EB;
+        .amazon-link {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 11px 20px;
+            background: var(--surface); color: var(--text-2);
+            border: 1.5px solid var(--border);
+            border-radius: var(--r-sm);
+            font-size: 13px; font-weight: 600;
+            text-decoration: none; transition: all 0.15s;
         }
-        .location-item.keyword-result {
-            background: #FFFBEB; border-color: #FDE68A; border-left: 3px solid #D97706;
-        }
-        .location-subject { font-weight: 600; margin-bottom: 3px; font-size: 14px; color: #111827; }
-        .location-detail  { font-size: 13px; color: #6B7280; margin-bottom: 3px; }
-        .location-matches { font-size: 12px; color: #9CA3AF; }
+        .amazon-link:hover { background: var(--border-light); }
 
-        /* ---- Method badges ---- */
-        .method-badge {
-            display: inline-block; padding: 2px 7px; border-radius: 4px;
-            font-size: 10px; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.4px; margin-left: 8px;
+        /* ============================
+           WEB RESULTS CONTAINER
+        ============================ */
+        .web-card {
+            background: var(--surface);
+            border-radius: var(--r-md);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 16px;
         }
-        .badge-ai      { background: #DBEAFE; color: #1D4ED8; }
-        .badge-keyword { background: #FEF3C7; color: #92400E; }
-
-        /* ---- Source badges (saved books) ---- */
-        .source-badge {
-            display: inline-block; padding: 2px 7px; border-radius: 4px;
-            font-size: 10px; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.4px; margin-right: 5px;
+        #web-ai-section {
+            border-bottom: 1px solid var(--border-light);
         }
-        .source-isbn   { background: #DBEAFE; color: #1E40AF; }
-        .source-cover  { background: #EDE9FE; color: #6D28D9; }
-        .source-search { background: #D1FAE5; color: #065F46; }
-        .source-web    { background: #E0F2FE; color: #0369A1; }
-        .source-manual { background: #F3F4F6; color: #374151; }
-
-        /* ---- Price / Save sections ---- */
-        .price-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #F3F4F6; }
-        .price-btn {
-            width: 100%; padding: 12px; background: #1E3A5F; color: white;
-            text-decoration: none; display: block; text-align: center;
-            border-radius: 7px; font-weight: 500; font-size: 14px;
+        .web-results-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .web-results-title {
+            font-size: 15px; font-weight: 700; color: var(--text-1);
+            letter-spacing: -0.2px;
+        }
+        .web-results-sub {
+            font-size: 12px; color: var(--text-3); margin-top: 2px;
+        }
+        .web-result-item {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .web-result-item:last-child { border-bottom: none; }
+        .web-result-name { font-weight: 600; font-size: 14px; color: var(--text-1); margin-bottom: 3px; }
+        .web-result-domain { font-size: 11px; color: var(--success); font-weight: 600; margin-bottom: 5px; }
+        .web-result-snippet { font-size: 13px; color: var(--text-2); line-height: 1.45; }
+        .web-result-btn {
+            margin-top: 10px; width: 100%;
+            padding: 10px 16px;
+            background: var(--primary); color: white;
+            border: none; border-radius: var(--r-sm);
+            font-size: 13px; font-weight: 600;
+            cursor: pointer; font-family: inherit;
             transition: background 0.15s;
         }
-        .price-btn:hover { background: #162D4A; }
-        .save-section { margin-top: 12px; }
+        .web-result-btn:hover { background: var(--primary-dark); }
+        .web-result-btn:active { transform: scale(0.98); }
 
-        /* ---- Web results ---- */
-        .web-result-card {
-            background: white; border-radius: 8px; padding: 14px;
-            margin-bottom: 10px;
-            border: 1px solid #E5E7EB;
-            border-left: 3px solid #16A34A;
+        /* ============================
+           SAVED BOOKS VIEW
+        ============================ */
+        #saved-view { min-height: 100%; }
+        .saved-scroll {
+            max-width: 560px; margin: 0 auto;
+            padding: 20px 16px 28px;
         }
-        .web-result-title   { font-weight: 600; margin-bottom: 3px; font-size: 14px; color: #111827; }
-        .web-result-link    { font-size: 11px; color: #16A34A; margin-bottom: 5px; }
-        .web-result-snippet { font-size: 13px; color: #6B7280; line-height: 1.5; }
-
-        /* ---- Status / error ---- */
-        .loading { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
-        .error {
-            background: #FEF2F2; color: #B91C1C;
-            border: 1px solid #FECACA;
-            padding: 14px 16px; border-radius: 8px; margin-bottom: 14px;
-            font-size: 14px;
+        .saved-toolbar {
+            display: flex; align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
         }
-        .status {
-            position: fixed; bottom: 16px; left: 16px; right: 16px; padding: 12px 16px;
-            background: white; border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-            border: 1px solid #E5E7EB;
-            font-size: 13px; color: #374151; text-align: center; z-index: 200;
+        .saved-title {
+            font-size: 22px; font-weight: 800;
+            letter-spacing: -0.5px; color: var(--text-1);
         }
-
-        /* ---- Modals ---- */
-        .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.35); z-index: 1000;
-            justify-content: center; align-items: center; padding: 16px;
-            backdrop-filter: blur(2px);
-        }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: white; border-radius: 12px; max-width: 500px; width: 100%;
-            max-height: 85vh; overflow-y: auto; padding: 24px; position: relative;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.14);
-        }
-        .modal-header { font-size: 17px; font-weight: 700; margin-bottom: 16px; color: #111827; letter-spacing: -0.2px; }
-        .modal-item {
-            padding: 14px 16px; border: 1px solid #E5E7EB; border-radius: 8px;
-            margin-bottom: 10px; cursor: pointer; transition: all 0.15s;
-        }
-        .modal-item:hover { border-color: #1E3A5F; background: #F7F8FA; }
-        .modal-item-title  { font-weight: 600; margin-bottom: 3px; font-size: 14px; }
-        .modal-item-author { color: #6B7280; font-size: 13px; }
-        .close-modal {
-            position: absolute; top: 16px; right: 16px; background: none; border: none;
-            font-size: 20px; cursor: pointer; color: #9CA3AF; padding: 0;
-            width: 28px; height: 28px; line-height: 28px; text-align: center; flex: none;
-            border-radius: 6px; transition: all 0.15s;
-        }
-        .close-modal:hover { background: #F3F4F6; color: #374151; }
-
-        /* ---- Save / form modal ---- */
-        .form-group { margin-bottom: 14px; }
-        .form-group label {
-            display: block; font-weight: 500; font-size: 13px;
-            margin-bottom: 5px; color: #374151;
-        }
-        .form-group input, .form-group select, .form-group textarea {
-            width: 100%; padding: 9px 11px; font-size: 14px;
-            border: 1px solid #D1D5DB; border-radius: 7px; outline: none;
-            transition: border-color 0.15s, box-shadow 0.15s;
-            font-family: inherit; color: #111827; background: white;
-        }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            border-color: #1E3A5F;
-            box-shadow: 0 0 0 3px rgba(30,58,95,0.08);
-        }
-        .form-group textarea { resize: vertical; min-height: 60px; }
-
-        /* ---- Saved Books view ---- */
-        #saved-view { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
-        .saved-header {
-            display: flex; justify-content: space-between; align-items: center;
-            background: white; padding: 16px 20px; border-radius: 10px;
-            margin-bottom: 14px;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-        .saved-header h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
         .saved-book-card {
-            background: white; border-radius: 10px; padding: 16px 18px;
-            margin-bottom: 10px;
-            border: 1px solid #E5E7EB;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            background: var(--surface);
+            border-radius: var(--r-md);
+            padding: 16px 18px; margin-bottom: 10px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
         }
-        .saved-book-title  { font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #111827; }
-        .saved-book-author { font-size: 13px; color: #6B7280; margin-bottom: 5px; }
-        .saved-book-meta   { font-size: 12px; color: #9CA3AF; margin-bottom: 8px; }
-        .saved-book-notes  {
-            font-size: 13px; color: #6B7280; background: #F9FAFB;
-            padding: 8px 10px; border-radius: 6px; margin-bottom: 10px;
-            border: 1px solid #F3F4F6;
+        .saved-book-title  { font-size: 15px; font-weight: 700; margin-bottom: 2px; color: var(--text-1); letter-spacing: -0.2px; }
+        .saved-book-author { font-size: 13px; color: var(--text-2); font-weight: 500; margin-bottom: 10px; }
+        .saved-location-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: var(--primary-light); color: var(--primary);
+            border-radius: 6px; padding: 4px 10px;
+            font-size: 12px; font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .saved-book-meta {
+            font-size: 12px; color: var(--text-3);
+            margin-bottom: 8px;
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        }
+        .saved-book-notes {
+            font-size: 13px; color: var(--text-2);
+            background: var(--bg); padding: 8px 12px;
+            border-radius: var(--r-sm); margin-bottom: 10px;
+            border: 1px solid var(--border-light); line-height: 1.45;
         }
         .saved-book-actions { display: flex; gap: 8px; }
-        .edit-field {
-            width: 100%; padding: 6px 8px; font-size: 13px;
-            border: 1px solid #1E3A5F; border-radius: 6px; margin-bottom: 6px;
-            font-family: inherit; color: #111827; outline: none;
+
+        /* Source badges */
+        .source-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.4px;
         }
-        .empty-state { text-align: center; padding: 60px 20px; color: #9CA3AF; }
-        .empty-state div { font-size: 36px; margin-bottom: 10px; opacity: 0.4; }
-        .empty-state p { font-size: 14px; }
+        .source-isbn   { background: var(--accent-light); color: #1E40AF; }
+        .source-cover  { background: #EDE9FE; color: #6D28D9; }
+        .source-search { background: var(--success-light); color: #065F46; }
+        .source-web    { background: #E0F2FE; color: #0369A1; }
+        .source-manual { background: var(--border-light); color: var(--text-2); }
+
+        /* Edit fields */
+        .edit-field {
+            width: 100%; padding: 9px 12px; font-size: 14px;
+            border: 1.5px solid var(--border); border-radius: var(--r-sm);
+            margin-bottom: 10px; font-family: inherit;
+            color: var(--text-1); outline: none; background: var(--bg);
+        }
+        .edit-field:focus { border-color: var(--primary); background: white; }
+
+        /* ============================
+           MODALS (bottom sheets)
+        ============================ */
+        .modal {
+            display: none; position: fixed; inset: 0;
+            background: rgba(15,23,42,0.45);
+            z-index: 1000;
+            justify-content: flex-end;
+            align-items: flex-end;
+            backdrop-filter: blur(3px);
+        }
+        .modal.active { display: flex; }
+        .modal-sheet {
+            background: var(--surface);
+            border-radius: var(--r-lg) var(--r-lg) 0 0;
+            width: 100%; max-height: 92vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 -4px 32px rgba(0,0,0,0.18);
+            animation: slideUp 0.22s cubic-bezier(0.25,0.46,0.45,0.94);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+        .modal-drag-handle {
+            width: 36px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 12px auto 0;
+        }
+        .modal-header-row {
+            display: flex; align-items: center;
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .modal-title {
+            font-size: 17px; font-weight: 700;
+            letter-spacing: -0.3px; color: var(--text-1); flex: 1;
+        }
+        .close-modal {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--border-light); border: none;
+            font-size: 17px; cursor: pointer; color: var(--text-2);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: all 0.15s;
+        }
+        .close-modal:hover { background: var(--border); color: var(--text-1); }
+        .modal-body { padding: 16px 20px; }
+
+        /* Modal list items (book picker) */
+        .modal-item {
+            padding: 13px 16px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--r-sm); margin-bottom: 10px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .modal-item:hover { border-color: var(--primary); background: var(--primary-light); }
+        .modal-item:active { transform: scale(0.98); }
+        .modal-item-title  { font-weight: 600; margin-bottom: 3px; font-size: 14px; color: var(--text-1); }
+        .modal-item-author { color: var(--text-2); font-size: 13px; }
+
+        /* ============================
+           FORMS
+        ============================ */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-weight: 700; font-size: 11px;
+            margin-bottom: 6px; color: var(--text-3);
+            text-transform: uppercase; letter-spacing: 0.6px;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%; padding: 11px 14px; font-size: 14px;
+            border: 1.5px solid var(--border); border-radius: var(--r-sm);
+            outline: none; font-family: inherit;
+            color: var(--text-1); background: var(--bg);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(30,58,95,0.08);
+        }
+        .form-group textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+        .modal-form-actions { display: flex; gap: 8px; margin-top: 4px; padding-bottom: 4px; }
+
+        /* ============================
+           STATUS TOAST
+        ============================ */
+        #status {
+            position: fixed;
+            bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 12px);
+            left: 16px; right: 16px;
+            padding: 13px 18px;
+            background: #1E293B;
+            color: white;
+            border-radius: var(--r-md);
+            box-shadow: var(--shadow-lg);
+            font-size: 13px; font-weight: 500;
+            text-align: center; z-index: 200;
+            animation: fadeInUp 0.18s ease;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================
+           ERROR / EMPTY / LOADING
+        ============================ */
+        .error-card {
+            background: var(--danger-light); color: var(--danger);
+            border: 1.5px solid #FECACA;
+            padding: 14px 18px; border-radius: var(--r-md);
+            font-size: 14px; line-height: 1.5; margin-bottom: 16px;
+        }
+        .empty-state {
+            text-align: center; padding: 64px 24px; color: var(--text-3);
+        }
+        .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.45; }
+        .empty-state p { font-size: 14px; line-height: 1.5; }
+        .loading-state {
+            text-align: center; padding: 48px;
+            color: var(--text-3); font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -348,13 +762,13 @@
     <!-- Login Overlay -->
     <div id="login-overlay">
         <div class="login-box">
-            <div class="login-icon">
+            <div class="login-logo">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zm0 0A2.5 2.5 0 0 0 6.5 22H20v-3H6.5A2.5 2.5 0 0 1 4 19.5z"/>
                 </svg>
             </div>
             <h2>Library Scanner</h2>
-            <p>Sign in to continue</p>
+            <p>Sign in with your Midwest Attic account to continue.</p>
             <button class="btn-google" onclick="signInWithGoogle()">
                 <svg width="17" height="17" viewBox="0 0 18 18">
                     <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
@@ -364,49 +778,101 @@
                 </svg>
                 Continue with Google
             </button>
-            <div id="login-error" class="error" style="display:none; margin-top:12px;"></div>
+            <div id="login-error" style="display:none;"></div>
         </div>
     </div>
 
-    <!-- Navbar -->
-    <nav class="navbar">
-        <div class="navbar-container">
-            <a href="https://admin.midwestattic.com" class="nav-tab">Employee Page</a>
-            <button class="nav-tab active" id="tab-scanner" onclick="showView('scanner')">Book Scanner</button>
-            <button class="nav-tab" id="tab-saved" onclick="showView('saved')">Saved Books</button>
-            <div class="nav-user">
-                <span id="user-info"></span>
-                <button class="btn-signout" onclick="doSignOut()">Sign Out</button>
-            </div>
+    <!-- Top Header -->
+    <header class="app-header">
+        <div class="header-logo">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zm0 0A2.5 2.5 0 0 0 6.5 22H20v-3H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+            </svg>
         </div>
-    </nav>
+        <span class="header-title">Book Scanner</span>
+        <div class="header-user">
+            <span id="user-info"></span>
+            <button class="btn-signout" onclick="doSignOut()">Sign out</button>
+        </div>
+    </header>
 
     <!-- Scanner View -->
     <div id="scanner-view">
-        <div class="container">
-            <div class="header">
-                <h1>Book Scanner</h1>
-                <p class="subtitle">Scan or search to categorize books for the library</p>
+        <div class="scroll-content">
+
+            <div class="scan-actions">
+                <!-- Primary: Scan Barcode -->
+                <button class="scan-tile scan-tile-primary" onclick="startScanner()">
+                    <div class="tile-icon">
+                        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+                            <line x1="3"  y1="5"  x2="3"  y2="19"/>
+                            <line x1="6"  y1="5"  x2="6"  y2="19"/>
+                            <line x1="9"  y1="5"  x2="9"  y2="19"/>
+                            <line x1="12" y1="5"  x2="12" y2="19"/>
+                            <line x1="15.5" y1="5" x2="15.5" y2="19"/>
+                            <line x1="18" y1="5"  x2="18" y2="19"/>
+                            <line x1="21" y1="5"  x2="21" y2="19"/>
+                        </svg>
+                    </div>
+                    <div class="tile-text">
+                        <div class="tile-label">Scan Barcode</div>
+                        <div class="tile-desc">Point camera at the ISBN barcode</div>
+                    </div>
+                    <svg class="tile-chevron" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+
+                <!-- Secondary: Scan Cover -->
+                <button class="scan-tile scan-tile-secondary" onclick="triggerCoverCapture()">
+                    <div class="tile-icon">
+                        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                        </svg>
+                    </div>
+                    <div class="tile-text">
+                        <div class="tile-label">Scan Cover</div>
+                        <div class="tile-desc">AI identifies the book from a photo</div>
+                    </div>
+                    <svg class="tile-chevron" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+
+                <!-- Secondary: Manual Search -->
+                <button class="scan-tile scan-tile-secondary" onclick="showSearch()">
+                    <div class="tile-icon">
+                        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                    </div>
+                    <div class="tile-text">
+                        <div class="tile-label">Manual Search</div>
+                        <div class="tile-desc">Search by title, author, or ISBN</div>
+                    </div>
+                    <svg class="tile-chevron" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
             </div>
 
-            <div class="button-group">
-                <button class="btn-primary" onclick="startScanner()">Scan Barcode</button>
-                <button class="btn-primary" onclick="triggerCoverCapture()">Scan Cover</button>
-            </div>
-            <div class="button-group" style="margin-top:-4px;">
-                <button class="btn-secondary" onclick="showSearch()">Manual Search</button>
-            </div>
             <input type="file" id="cover-input" accept="image/*" capture="environment" style="display:none;" onchange="handleCoverCapture(event)">
 
+            <!-- Camera scanner -->
             <div id="scanner-container">
+                <div class="scanner-header">
+                    <span class="scanner-header-title">Scanning for barcode…</span>
+                </div>
                 <div id="reader"></div>
-                <button class="btn-secondary" style="margin-top:12px; width:100%;" onclick="stopScanner()">Cancel</button>
+                <div class="scanner-footer">
+                    <button class="btn btn-secondary btn-full" onclick="stopScanner()">Cancel</button>
+                </div>
             </div>
 
-            <div class="search-container" id="search-container">
-                <input type="text" class="search-input" id="search-input" placeholder="Enter title, author, or ISBN...">
-                <button class="btn-primary" style="width:100%;" onclick="performSearch()">Search</button>
-                <button class="btn-secondary" style="width:100%; margin-top:8px;" onclick="hideSearch()">Cancel</button>
+            <!-- Manual search -->
+            <div id="search-container">
+                <div class="search-label">Search books</div>
+                <input type="text" class="search-input" id="search-input" placeholder="Title, author, or ISBN…">
+                <div class="search-actions">
+                    <button class="btn btn-secondary" onclick="hideSearch()">Cancel</button>
+                    <button class="btn btn-primary" onclick="performSearch()">Search</button>
+                </div>
             </div>
 
             <div id="results"></div>
@@ -415,72 +881,76 @@
 
     <!-- Saved Books View -->
     <div id="saved-view" style="display:none;">
-        <div class="saved-header">
-            <h2>Saved Books</h2>
-            <button class="btn-primary btn-sm" onclick="openManualAdd()">+ Add Manually</button>
-        </div>
-        <div id="saved-books-list">
-            <div class="empty-state"><div>&#9776;</div><p>No saved books yet.</p></div>
+        <div class="saved-scroll">
+            <div class="saved-toolbar">
+                <div class="saved-title">Saved Books</div>
+                <button class="btn btn-primary btn-sm" onclick="openManualAdd()">+ Add</button>
+            </div>
+            <div id="saved-books-list">
+                <div class="empty-state">
+                    <div class="empty-icon">📚</div>
+                    <p>No saved books yet.</p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Book Selection Modal -->
+    <!-- Book Selection Modal (bottom sheet) -->
     <div class="modal" id="results-modal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeModal()">×</button>
-            <div class="modal-header">Select a book:</div>
-            <div id="modal-results"></div>
+        <div class="modal-sheet">
+            <div class="modal-drag-handle"></div>
+            <div class="modal-header-row">
+                <div class="modal-title">Which book is this?</div>
+                <button class="close-modal" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-results"></div>
+            </div>
         </div>
     </div>
 
-    <!-- Save / Confirm Details Modal -->
+    <!-- Save / Confirm Details Modal (bottom sheet) -->
     <div class="modal" id="save-modal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeSaveModal()">×</button>
-            <div class="modal-header" id="save-modal-title">Save Book to Library</div>
-            <div class="form-group">
-                <label>Title</label>
-                <input type="text" id="save-title" placeholder="Book title">
+        <div class="modal-sheet">
+            <div class="modal-drag-handle"></div>
+            <div class="modal-header-row">
+                <div class="modal-title" id="save-modal-title">Save Book to Library</div>
+                <button class="close-modal" onclick="closeSaveModal()">×</button>
             </div>
-            <div class="form-group">
-                <label>Author</label>
-                <input type="text" id="save-author" placeholder="Author name">
-            </div>
-            <div class="form-group">
-                <label>ISBN</label>
-                <input type="text" id="save-isbn" placeholder="ISBN (optional)">
-            </div>
-            <div class="form-group">
-                <label>Subject</label>
-                <select id="save-subject">
-                    <option value="">-- Select subject --</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Notes</label>
-                <textarea id="save-notes" placeholder="Optional notes about this book..."></textarea>
-            </div>
-            <input type="hidden" id="save-source" value="manual">
-            <input type="hidden" id="save-description" value="">
-            <div style="display:flex; gap:8px; margin-top:8px;">
-                <button class="btn-secondary" style="flex:1;" onclick="closeSaveModal()">Cancel</button>
-                <button class="btn-primary" style="flex:2;" onclick="confirmSave()">Save to Library</button>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="save-title" placeholder="Book title">
+                </div>
+                <div class="form-group">
+                    <label>Author</label>
+                    <input type="text" id="save-author" placeholder="Author name">
+                </div>
+                <div class="form-group">
+                    <label>ISBN</label>
+                    <input type="text" id="save-isbn" placeholder="ISBN (optional)">
+                </div>
+                <div class="form-group">
+                    <label>Subject / Shelf Location</label>
+                    <select id="save-subject">
+                        <option value="">— Select subject —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="save-notes" placeholder="Optional notes…"></textarea>
+                </div>
+                <input type="hidden" id="save-source" value="manual">
+                <input type="hidden" id="save-description" value="">
+                <div class="modal-form-actions">
+                    <button class="btn btn-secondary" style="flex:1;" onclick="closeSaveModal()">Cancel</button>
+                    <button class="btn btn-primary" style="flex:2;" onclick="confirmSave()">Save to Library</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="status" id="status" style="display:none;"></div>
-
-    <!-- Debug Panel (remove once issue is diagnosed) -->
-    <div id="debug-panel" style="position:fixed;bottom:80px;left:0;right:0;z-index:999;padding:0 12px;">
-        <div style="background:#1a1a1a;color:#0f0;font-family:monospace;font-size:11px;border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.4);">
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#111;cursor:pointer;" onclick="document.getElementById('debug-log').style.display=document.getElementById('debug-log').style.display==='none'?'block':'none'">
-                <span>🔍 Debug Log</span>
-                <button onclick="event.stopPropagation();document.getElementById('debug-log').innerHTML=''" style="background:none;border:none;color:#0f0;font-size:11px;cursor:pointer;">clear</button>
-            </div>
-            <div id="debug-log" style="max-height:180px;overflow-y:auto;padding:6px 10px;display:block;"></div>
-        </div>
-    </div>
+    <div id="status" style="display:none;"></div>
 
     <script>
         // ===================================
@@ -763,7 +1233,6 @@
                         const fallback     = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(data.title)}&maxResults=5`);
                         const fallbackData = await fallback.json();
                         if (!fallbackData.items || fallbackData.items.length === 0) {
-                            debugLog(`Google Books cover fallback failed → trying Open Library`);
                             try {
                                 const olResults = await openLibraryTextSearch(null, data.title, data.author);
                                 if (olResults.length > 0) {
@@ -774,7 +1243,7 @@
                                     return;
                                 }
                             } catch (olErr) {
-                                debugLog(`OL cover error: ${olErr.message}`);
+                                // ignore, fall through to web search
                             }
                             currentScanSource = 'cover_scan';
                             await performWebSearch(`${data.title} ${data.author || ''} book`);
@@ -832,7 +1301,6 @@
                 hideStatus();
 
                 if (!data.items || data.items.length === 0) {
-                    debugLog(`Google Books text search failed (${response.status}) → trying Open Library`);
                     try {
                         const olResults = await openLibraryTextSearch(query);
                         if (olResults.length > 0) {
@@ -842,7 +1310,7 @@
                             return;
                         }
                     } catch (olErr) {
-                        debugLog(`OL search error: ${olErr.message}`);
+                        // ignore, fall through to web search
                     }
                     currentScanSource = 'web_search';
                     await performWebSearch(`${query} book`);
@@ -862,22 +1330,6 @@
         // ===================================
         // Open Library Fallback
         // ===================================
-        function adaptOpenLibraryBook(book, isbn) {
-            const notes = book.notes;
-            const description = notes
-                ? (typeof notes === 'string' ? notes : (notes.value || ''))
-                : '';
-            return {
-                volumeInfo: {
-                    title:       book.title || 'Unknown Title',
-                    authors:     (book.authors || []).map(a => a.name),
-                    description: description,
-                    categories:  (book.subjects || []).slice(0, 5).map(s => typeof s === 'string' ? s : s.name),
-                    industryIdentifiers: [{ type: 'ISBN_13', identifier: isbn }],
-                }
-            };
-        }
-
         function adaptOpenLibraryDoc(doc) {
             const isbn = (doc.isbn || [])[0] || '';
             const fs = doc.first_sentence;
@@ -898,17 +1350,13 @@
         }
 
         async function openLibraryISBNLookup(isbn) {
-            debugLog(`OL ISBN: ${isbn}`);
             const url = `https://openlibrary.org/search.json?isbn=${isbn}&fields=key,title,author_name,isbn,subject,first_sentence&limit=1`;
             try {
                 const response = await fetchWithTimeout(url, {}, 20000);
-                debugLog(`OL ISBN: HTTP ${response.status}`);
                 const data = await response.json();
-                if (!data.docs || !data.docs.length) { debugLog(`OL ISBN: not found`); return null; }
-                debugLog(`OL ISBN: found "${data.docs[0].title}"`);
+                if (!data.docs || !data.docs.length) { return null; }
                 return adaptOpenLibraryDoc(data.docs[0]);
             } catch (err) {
-                debugLog(`OL ISBN fetch error: ${err.name}: ${err.message}`);
                 return null;
             }
         }
@@ -920,16 +1368,12 @@
             } else {
                 url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=5&fields=key,title,author_name,isbn,subject,first_sentence`;
             }
-            debugLog(`OL text: ${title || query}`);
             try {
                 const response = await fetchWithTimeout(url, {}, 20000);
-                debugLog(`OL text: HTTP ${response.status}`);
                 const data = await response.json();
-                if (!data.docs || !data.docs.length) { debugLog(`OL text: no results`); return []; }
-                debugLog(`OL text: ${data.docs.length} result(s)`);
+                if (!data.docs || !data.docs.length) { return []; }
                 return data.docs.map(adaptOpenLibraryDoc);
             } catch (err) {
-                debugLog(`OL text fetch error: ${err.name}: ${err.message}`);
                 return [];
             }
         }
@@ -938,15 +1382,11 @@
             showStatus('Looking up book...');
             try {
                 const cleanISBN = isbn.replace(/[^0-9X]/gi, '');
-                debugLog(`ISBN scanned: ${cleanISBN} (${cleanISBN.length} digits)`);
                 let data, response;
 
                 // Strategy 1: direct ISBN search
-                debugLog(`S1: querying isbn:${cleanISBN}`);
                 response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
                 data = await response.json();
-                debugLog(`S1: HTTP ${response.status}, totalItems=${data.totalItems ?? '?'}, items=${data.items?.length ?? 0}`);
-                if (data.error) debugLog(`S1 error: ${data.error.code} ${data.error.message}`);
 
                 // Strategy 2: try ISBN-10 if EAN-13
                 if ((!data.items || !data.items.length) && cleanISBN.length === 13 && (cleanISBN.startsWith('978') || cleanISBN.startsWith('979'))) {
@@ -955,27 +1395,20 @@
                     for (let i = 0; i < 9; i++) { sum += parseInt(isbn9[i]) * (10 - i); }
                     const checkDigit = (11 - (sum % 11)) % 11;
                     const isbn10 = isbn9 + (checkDigit === 10 ? 'X' : checkDigit.toString());
-                    debugLog(`S2: querying isbn:${isbn10}`);
                     response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}`);
                     data = await response.json();
-                    debugLog(`S2: HTTP ${response.status}, totalItems=${data.totalItems ?? '?'}, items=${data.items?.length ?? 0}`);
-                    if (data.error) debugLog(`S2 error: ${data.error.code} ${data.error.message}`);
                 }
 
                 // Strategy 3: general query
                 if (!data.items || !data.items.length) {
-                    debugLog(`S3: general query for ${cleanISBN}`);
                     response = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=${cleanISBN}`);
                     data = await response.json();
-                    debugLog(`S3: HTTP ${response.status}, totalItems=${data.totalItems ?? '?'}, items=${data.items?.length ?? 0}`);
-                    if (data.error) debugLog(`S3 error: ${data.error.code} ${data.error.message}`);
                 }
 
                 hideStatus();
 
                 if (!data.items || !data.items.length) {
                     // Try Open Library before giving up (handles Google Books quota errors)
-                    debugLog(`Google Books failed → trying Open Library`);
                     try {
                         let olBook = await openLibraryISBNLookup(cleanISBN);
                         if (!olBook && cleanISBN.length === 13) {
@@ -989,31 +1422,28 @@
                         }
                         if (olBook) {
                             currentScanSource = 'isbn_scan';
-                            await displayBook(olBook);
+                            displayBook(olBook);
                             scanInProgress = false;
                             return;
                         }
                     } catch (olErr) {
-                        debugLog(`OL error: ${olErr.message}`);
+                        // ignore, fall through to web search
                     }
-                    debugLog(`All sources failed → web search`);
                     scanInProgress = false;
                     currentScanSource = 'isbn_scan';
                     await performWebSearch(`ISBN ${cleanISBN} book`);
                     return;
                 }
 
-                debugLog(`Found: "${data.items[0].volumeInfo.title}" (${data.items.length} result(s))`);
                 currentScanSource = 'isbn_scan';
                 if (data.items.length === 1) {
-                    await displayBook(data.items[0]);
+                    displayBook(data.items[0]);
                 } else {
                     showResultsModal(data.items);
                 }
                 scanInProgress = false;
             } catch (error) {
                 hideStatus();
-                debugLog(`ERROR: ${error.name}: ${error.message}`);
                 showError('Lookup failed. Please check your connection.');
                 console.error('ISBN lookup error:', error);
                 scanInProgress = false;
@@ -1053,29 +1483,29 @@
             window._webResults = results;
             window._webAiMatch = null;
 
-            // Render immediately with AI loading state at top
             document.getElementById('results').innerHTML = `
-                <div class="result-card">
-                    <div id="web-ai-section">
-                        <div class="locations">
-                            <div class="locations-title">🤖 Classifying with AI...</div>
+                <div class="web-card">
+                    <div id="web-ai-section" style="padding:14px 20px;">
+                        <div class="location-loading">
+                            <div class="spinner"></div>
+                            Classifying with AI…
                         </div>
                     </div>
-                    <div class="book-author" style="margin:12px 0 8px; font-size:13px; color:#6B7280;">Not found in book database — confirm the right match below:</div>
+                    <div class="web-results-header">
+                        <div class="web-results-title">Which book is this?</div>
+                        <div class="web-results-sub">Select the correct result below</div>
+                    </div>
                     ${results.map((r, i) => `
-                        <div class="web-result-card">
-                            <div class="web-result-title">${escapeHtml(r.title)}</div>
-                            <div class="web-result-link">${escapeHtml(r.displayLink || r.link)}</div>
+                        <div class="web-result-item">
+                            <div class="web-result-name">${escapeHtml(r.title)}</div>
+                            <div class="web-result-domain">${escapeHtml(r.displayLink || r.link)}</div>
                             <div class="web-result-snippet">${escapeHtml(r.snippet || '')}</div>
-                            <div style="margin-top:10px;">
-                                <button class="btn-primary btn-sm" onclick="openSaveModalFromWeb(${i})">Save This</button>
-                            </div>
+                            <button class="web-result-btn" onclick="selectWebResult(${i})">This is the book</button>
                         </div>
                     `).join('')}
                 </div>
             `;
 
-            // Run AI classification using title + combined snippets from top results
             if (USE_AI_CLASSIFICATION && results.length > 0) {
                 try {
                     const combinedText = results.slice(0, 3).map(r => r.snippet || '').filter(Boolean).join(' ');
@@ -1084,28 +1514,30 @@
                     const aiSection = document.getElementById('web-ai-section');
                     if (aiSection) {
                         if (match) {
+                            const shelfLine = `Floor ${match.floor}${match.aisle ? ' · Aisle ' + match.aisle : ''}${match.room ? ' · ' + match.room : ''}`;
                             aiSection.innerHTML = `
-                                <div class="locations">
-                                    <div class="locations-title">🤖 AI Classification <span class="method-badge badge-ai">Gemini AI</span></div>
-                                    <div class="location-item ai-result">
-                                        <div class="location-subject">🎯 ${escapeHtml(match.subject)}</div>
-                                        <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
-                                        <div class="location-matches">Analyzed by Google Gemini AI</div>
+                                <div class="location-card">
+                                    <div class="location-card-row1">
+                                        <span class="location-eyebrow">📍 Where it goes</span>
+                                        <span class="ai-chip">AI</span>
                                     </div>
+                                    <div class="location-shelf">${escapeHtml(shelfLine)}</div>
+                                    <div class="location-subject-name">${escapeHtml(match.subject)}</div>
+                                    ${match.reasoning ? `<div class="location-reasoning">${escapeHtml(match.reasoning)}</div>` : ''}
                                 </div>
                             `;
                         } else {
-                            aiSection.innerHTML = '';
+                            aiSection.style.display = 'none';
                         }
                     }
                 } catch (e) {
                     console.warn('AI classification failed for web results:', e);
                     const aiSection = document.getElementById('web-ai-section');
-                    if (aiSection) aiSection.innerHTML = '';
+                    if (aiSection) aiSection.style.display = 'none';
                 }
             } else {
                 const aiSection = document.getElementById('web-ai-section');
-                if (aiSection) aiSection.innerHTML = '';
+                if (aiSection) aiSection.style.display = 'none';
             }
         }
 
@@ -1140,7 +1572,7 @@
         // ===================================
         // Display Book
         // ===================================
-        async function displayBook(bookData) {
+        function displayBook(bookData) {
             const info = bookData.volumeInfo;
             const isbn = (info.industryIdentifiers || []).find(id => id.type.includes('ISBN'))?.identifier || 'N/A';
 
@@ -1152,107 +1584,85 @@
                 isbn:        isbn
             };
 
-            showStatus('Analyzing book with AI...');
-            let aiMatch = null;
-            if (USE_AI_CLASSIFICATION) {
-                // Use description if available, otherwise fall back to subject categories
-                const classifyText = (currentBook.description && currentBook.description !== 'No description available.')
-                    ? currentBook.description
-                    : currentBook.categories.join(', ');
-                if (classifyText) {
-                    try {
-                        aiMatch = await classifyBookWithAI(currentBook.title, classifyText);
-                    } catch (error) {
-                        console.warn('AI classification failed, falling back to keyword matching:', error);
-                    }
-                }
-            }
             hideStatus();
 
-            const keywordMatches  = findMatches(currentBook.description, currentBook.categories.join(' '));
-            const highlightedDesc = highlightKeywords(currentBook.description, keywordMatches);
-            const suggestedSubject = aiMatch
-                ? aiMatch.subject
-                : (keywordMatches.length > 0 ? keywordMatches[0].subject : '');
-
-            // Store pending save data globally (avoid inline attribute escaping issues)
             pendingSave = {
                 title:       currentBook.title,
                 author:      currentBook.authors.join(', '),
                 isbn:        currentBook.isbn,
-                subject:     suggestedSubject,
+                subject:     '',
                 description: currentBook.description,
                 source:      currentScanSource,
                 modalTitle:  'Save Book to Library'
             };
 
-            let locationsHTML = '';
-            if (aiMatch) {
-                console.log('🤖 AI Classification:', aiMatch.subject);
-                locationsHTML = `
-                    <div class="locations">
-                        <div class="locations-title">🤖 AI Classification <span class="method-badge badge-ai">Gemini AI</span></div>
-                        <div class="location-item ai-result">
-                            <div class="location-subject">🎯 ${escapeHtml(aiMatch.subject)}</div>
-                            <div class="location-detail">Floor ${aiMatch.floor}${aiMatch.aisle ? ', Aisle ' + aiMatch.aisle : ''}${aiMatch.room ? ', ' + aiMatch.room : ''}</div>
-                            <div class="location-matches">Analyzed by Google Gemini AI</div>
-                        </div>
-                        ${keywordMatches.length > 0 ? `
-                            <div style="margin-top:16px; padding-top:16px; border-top:2px solid #e0e0e0;">
-                                <div class="locations-title">📋 Keyword Matching Results <span class="method-badge badge-keyword">Keywords</span></div>
-                                <div style="font-size:13px; color:#666; margin-bottom:8px;">Compare to AI result above</div>
-                                ${keywordMatches.slice(0, 3).map((match, index) => `
-                                    <div class="location-item keyword-result">
-                                        <div class="location-subject">${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'} ${escapeHtml(match.subject)}</div>
-                                        <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
-                                        <div class="location-matches">Matched keywords: ${match.matched_keywords.slice(0, 3).join(', ')}</div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : `
-                            <div style="margin-top:16px; padding-top:16px; border-top:2px solid #e0e0e0;">
-                                <div class="locations-title">📋 Keyword Matching Results <span class="method-badge badge-keyword">Keywords</span></div>
-                                <div style="font-size:13px; color:#999; font-style:italic;">No keyword matches found</div>
-                            </div>
-                        `}
-                    </div>
-                `;
-            } else if (keywordMatches.length > 0) {
-                console.log('📋 Keyword-only results:', keywordMatches.slice(0, 4).map(m => m.subject));
-                locationsHTML = `
-                    <div class="locations">
-                        <div class="locations-title">📍 Suggested Locations <span class="method-badge badge-keyword">Keywords Only</span></div>
-                        <div style="font-size:13px; color:#666; margin-bottom:8px;">AI classification unavailable - using keyword matching</div>
-                        ${keywordMatches.slice(0, 4).map((match, index) => `
-                            <div class="location-item keyword-result ${index === 0 ? 'primary' : ''}">
-                                <div class="location-subject">${index === 0 ? '🎯' : '📌'} ${escapeHtml(match.subject)}</div>
-                                <div class="location-detail">Floor ${match.floor}${match.aisle ? ', Aisle ' + match.aisle : ''}${match.room ? ', ' + match.room : ''}</div>
-                                <div class="location-matches">Matched: ${match.matched_keywords.slice(0, 3).join(', ')}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } else {
-                console.warn('⚠️ No AI or keyword matches found');
-                locationsHTML = '<div class="locations"><div class="error">No matching categories found. Please categorize manually.</div></div>';
-            }
+            const amazonUrl = `https://www.amazon.com/s?k=${encodeURIComponent(currentBook.isbn !== 'N/A' ? currentBook.isbn : currentBook.title + ' ' + (currentBook.authors[0] || ''))}&i=stripbooks`;
 
             document.getElementById('results').innerHTML = `
                 <div class="result-card">
-                    <div class="book-title">${escapeHtml(currentBook.title)}</div>
-                    <div class="book-author">${escapeHtml(currentBook.authors.join(', '))}</div>
-                    ${currentBook.categories.length > 0 ? `<div class="book-category">${escapeHtml(currentBook.categories[0])}</div>` : ''}
-                    <div class="description" id="description">${highlightedDesc}</div>
-                    ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">Show more</button>' : ''}
-                    ${locationsHTML}
-                    <div class="save-section">
-                        <button class="btn-primary" style="width:100%;" onclick="openSaveModal()">Save to Library</button>
+                    <div class="result-book-header">
+                        ${currentBook.categories.length > 0 ? `<div class="book-genre-tag">${escapeHtml(currentBook.categories[0])}</div>` : ''}
+                        <div class="book-title">${escapeHtml(currentBook.title)}</div>
+                        <div class="book-author">${escapeHtml(currentBook.authors.join(', '))}</div>
                     </div>
-                    <div class="price-section">
-                        <a href="https://www.amazon.com/s?k=${encodeURIComponent(currentBook.isbn !== 'N/A' ? currentBook.isbn : currentBook.title + ' ' + (currentBook.authors[0] || ''))}&i=stripbooks" target="_blank" class="price-btn">💲 Check Amazon Price →</a>
+                    <div class="location-block" id="locations-section">
+                        <div class="location-loading">
+                            <div class="spinner"></div>
+                            Classifying with AI…
+                        </div>
+                    </div>
+                    <div class="description-block">
+                        <div class="section-label">About this book</div>
+                        <div class="description" id="description">${escapeHtml(currentBook.description)}</div>
+                        ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">Show more ▼</button>' : ''}
+                    </div>
+                    <div class="result-actions">
+                        <button class="btn btn-primary btn-full" onclick="openSaveModal()">Save to Library</button>
+                        <a href="${amazonUrl}" target="_blank" class="amazon-link">💲 Check price on Amazon</a>
                     </div>
                 </div>
             `;
+
+            const classifyText = (currentBook.description && currentBook.description !== 'No description available.')
+                ? currentBook.description
+                : currentBook.categories.join(', ') || currentBook.title;
+
+            classifyBookWithAI(currentBook.title, classifyText)
+                .then(aiMatch => {
+                    const locSection = document.getElementById('locations-section');
+                    if (!locSection) return;
+                    if (aiMatch) {
+                        console.log('🤖 AI Classification:', aiMatch.subject);
+                        pendingSave.subject = aiMatch.subject;
+                        const shelfLine = `Floor ${aiMatch.floor}${aiMatch.aisle ? ' · Aisle ' + aiMatch.aisle : ''}${aiMatch.room ? ' · ' + aiMatch.room : ''}`;
+                        locSection.innerHTML = `
+                            <div class="location-card">
+                                <div class="location-card-row1">
+                                    <span class="location-eyebrow">📍 Where it goes</span>
+                                    <span class="ai-chip">AI</span>
+                                </div>
+                                <div class="location-shelf">${escapeHtml(shelfLine)}</div>
+                                <div class="location-subject-name">${escapeHtml(aiMatch.subject)}</div>
+                                ${aiMatch.reasoning ? `<div class="location-reasoning">${escapeHtml(aiMatch.reasoning)}</div>` : ''}
+                            </div>
+                        `;
+                    } else {
+                        locSection.innerHTML = `
+                            <div class="location-none">
+                                Could not determine a category — please select one when saving.
+                            </div>
+                        `;
+                    }
+                })
+                .catch(() => {
+                    const locSection = document.getElementById('locations-section');
+                    if (!locSection) return;
+                    locSection.innerHTML = `
+                        <div class="location-none">
+                            Could not determine a category — please select one when saving.
+                        </div>
+                    `;
+                });
         }
 
         // ===================================
@@ -1278,45 +1688,26 @@
             document.getElementById('save-modal').classList.add('active');
         }
 
-        async function openSaveModalFromWeb(index) {
+        function selectWebResult(index) {
             const r = (window._webResults || [])[index];
             if (!r) return;
-            // Use cached AI match from renderWebResults if available
-            const cachedMatch = window._webAiMatch;
-            pendingSave = {
-                title:       r.title,
-                author:      '',
-                isbn:        '',
-                subject:     cachedMatch ? cachedMatch.subject : '',
-                description: r.snippet || '',
-                source:      currentScanSource || 'web_search',
-                modalTitle:  'Save Book to Library'
-            };
-            openSaveModal();
-
-            // Only re-classify if renderWebResults hasn't produced a result yet
-            if (!cachedMatch && USE_AI_CLASSIFICATION && r.title) {
-                try {
-                    const match = await classifyBookWithAI(r.title, r.snippet || r.title);
-                    if (match) {
-                        const sel = document.getElementById('save-subject');
-                        if (sel) {
-                            for (let i = 0; i < sel.options.length; i++) {
-                                if (sel.options[i].value === match.subject) { sel.selectedIndex = i; break; }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn('AI classification failed for web result:', e);
+            currentScanSource = 'web_search';
+            displayBook({
+                volumeInfo: {
+                    title:               r.title,
+                    authors:             [],
+                    description:         r.snippet || r.title,
+                    categories:          [],
+                    industryIdentifiers: []
                 }
-            }
+            });
         }
 
         function openManualAdd() {
             pendingSave = {
                 title: '', author: '', isbn: '', subject: '',
                 description: '', source: 'manual',
-                modalTitle: '📝 Add Book Manually'
+                modalTitle: 'Add Book Manually'
             };
             openSaveModal();
         }
@@ -1374,16 +1765,16 @@
 
         async function loadSavedBooks() {
             const listEl = document.getElementById('saved-books-list');
-            listEl.innerHTML = '<div class="loading">Loading...</div>';
+            listEl.innerHTML = '<div class="loading-state">Loading…</div>';
             try {
                 const snap = await db.collection('savedBooks').orderBy('savedAt', 'desc').get();
                 if (snap.empty) {
-                    listEl.innerHTML = '<div class="empty-state"><div>&#9776;</div><p>No saved books yet. Scan a book to get started.</p></div>';
+                    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><p>No saved books yet. Scan a book to get started.</p></div>';
                     return;
                 }
                 listEl.innerHTML = snap.docs.map(doc => renderSavedBook(doc.id, doc.data())).join('');
             } catch (err) {
-                listEl.innerHTML = `<div class="error">Failed to load saved books: ${escapeHtml(err.message)}</div>`;
+                listEl.innerHTML = `<div class="error-card">Failed to load saved books: ${escapeHtml(err.message)}</div>`;
             }
         }
 
@@ -1404,23 +1795,23 @@
                 data.floor ? `Floor ${data.floor}` : '',
                 data.aisle ? `Aisle ${data.aisle}` : '',
                 data.room  || ''
-            ].filter(Boolean).join(', ');
+            ].filter(Boolean).join(' · ');
 
             return `
                 <div class="saved-book-card" id="saved-${id}">
                     <div class="saved-book-title">${escapeHtml(data.title)}</div>
                     <div class="saved-book-author">${escapeHtml(data.author || 'Unknown Author')}</div>
+                    ${data.subject ? `<div class="saved-location-pill">📍 ${escapeHtml(locationStr || data.subject)}</div>` : ''}
                     <div class="saved-book-meta">
                         ${sourceBadge(data.source)}
                         ${data.subject ? `<strong>${escapeHtml(data.subject)}</strong>` : ''}
-                        ${locationStr ? ` · ${locationStr}` : ''}
-                        ${data.isbn && data.isbn !== 'N/A' ? ` · ISBN: ${escapeHtml(data.isbn)}` : ''}
+                        ${data.isbn && data.isbn !== 'N/A' ? `<span>ISBN ${escapeHtml(data.isbn)}</span>` : ''}
                     </div>
                     ${data.notes ? `<div class="saved-book-notes">📝 ${escapeHtml(data.notes)}</div>` : ''}
-                    <div class="saved-book-meta" style="font-size:11px; color:#aaa;">Saved by ${escapeHtml(data.savedBy || '')}</div>
+                    <div class="saved-book-meta" style="font-size:11px;">Saved by ${escapeHtml(data.savedBy || '')}</div>
                     <div class="saved-book-actions">
-                        <button class="btn-secondary btn-sm" onclick="editSavedBook('${id}')">✏️ Edit</button>
-                        <button class="btn-danger btn-sm" onclick="deleteSavedBook('${id}')">🗑️ Delete</button>
+                        <button class="btn btn-secondary btn-sm" onclick="editSavedBook('${id}')">✏️ Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteSavedBook('${id}')">🗑️ Delete</button>
                     </div>
                 </div>
             `;
@@ -1452,7 +1843,7 @@
                 <div class="form-group">
                     <label>Subject / Shelf Location</label>
                     <select class="edit-field" id="edit-subject-${id}">
-                        <option value="">-- No subject --</option>
+                        <option value="">— No subject —</option>
                         ${subjectOptions}
                     </select>
                 </div>
@@ -1461,8 +1852,8 @@
                     <textarea class="edit-field" id="edit-notes-${id}">${escapeHtml(currentNotes)}</textarea>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn-secondary btn-sm" onclick="loadSavedBooks()">Cancel</button>
-                    <button class="btn-primary btn-sm" onclick="submitEditSavedBook('${id}')">Save</button>
+                    <button class="btn btn-secondary btn-sm" onclick="loadSavedBooks()">Cancel</button>
+                    <button class="btn btn-primary btn-sm" onclick="submitEditSavedBook('${id}')">Save</button>
                 </div>
             `;
         }
@@ -1528,50 +1919,9 @@
             const match = directory.find(entry => entry.subject === data.subject);
             if (match) {
                 console.log(`✅ AI classified book as: "${data.subject}"`);
-                return match;
+                return { ...match, reasoning: data.reasoning || '' };
             }
             return null;
-        }
-
-        // ===================================
-        // Keyword Matching
-        // ===================================
-        function findMatches(description, categories) {
-            const searchText = (description + ' ' + categories).toLowerCase();
-            const matches    = [];
-            for (const entry of directory) {
-                let score = 0;
-                const matched_keywords = [];
-                const subjectWords = entry.subject.toLowerCase().split(' ');
-                if (subjectWords.length > 1) {
-                    if (searchText.includes(entry.subject.toLowerCase())) {
-                        score += 10;
-                        matched_keywords.push(entry.subject);
-                    }
-                }
-                for (const keyword of entry.keywords) {
-                    if (keyword.length < 3) continue;
-                    const regex = new RegExp('\\b' + keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-                    if (regex.test(searchText)) {
-                        score += 1;
-                        if (!matched_keywords.includes(keyword)) matched_keywords.push(keyword);
-                    }
-                }
-                if (score > 0) matches.push({...entry, score, matched_keywords});
-            }
-            return matches.sort((a, b) => b.score - a.score);
-        }
-
-        function highlightKeywords(text, matches) {
-            if (!matches.length) return text;
-            const keywords = new Set();
-            matches.slice(0, 3).forEach(match => match.matched_keywords.forEach(kw => keywords.add(kw.toLowerCase())));
-            let highlightedText = text;
-            Array.from(keywords).sort((a, b) => b.length - a.length).forEach(keyword => {
-                const regex = new RegExp(`\\b(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
-                highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
-            });
-            return highlightedText;
         }
 
         // ===================================
@@ -1581,21 +1931,10 @@
             const desc = document.getElementById('description');
             const btn  = event.target;
             if (desc.classList.contains('expanded')) {
-                desc.classList.remove('expanded'); btn.textContent = '▼ Show more';
+                desc.classList.remove('expanded'); btn.textContent = 'Show more ▼';
             } else {
-                desc.classList.add('expanded'); btn.textContent = '▲ Show less';
+                desc.classList.add('expanded'); btn.textContent = 'Show less ▲';
             }
-        }
-
-        function debugLog(msg) {
-            const log = document.getElementById('debug-log');
-            if (!log) return;
-            const line = document.createElement('div');
-            line.style.borderBottom = '1px solid #222';
-            line.style.padding = '2px 0';
-            line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-            log.appendChild(line);
-            log.scrollTop = log.scrollHeight;
         }
 
         function showStatus(message) {
@@ -1609,7 +1948,7 @@
         }
 
         function showError(message) {
-            document.getElementById('results').innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+            document.getElementById('results').innerHTML = `<div class="error-card">${escapeHtml(message)}</div>`;
         }
 
         function escapeHtml(str) {
@@ -1626,5 +1965,35 @@
             });
         });
     </script>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+        <a href="https://admin.midwestattic.com" class="nav-tab">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <span class="nav-label">Employee</span>
+        </a>
+        <button class="nav-tab active" id="tab-scanner" onclick="showView('scanner')">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3"  y1="5"  x2="3"  y2="19"/>
+                <line x1="6"  y1="5"  x2="6"  y2="19"/>
+                <line x1="9"  y1="5"  x2="9"  y2="19"/>
+                <line x1="12" y1="5"  x2="12" y2="19"/>
+                <line x1="15.5" y1="5" x2="15.5" y2="19"/>
+                <line x1="18" y1="5"  x2="18" y2="19"/>
+                <line x1="21" y1="5"  x2="21" y2="19"/>
+            </svg>
+            <span class="nav-label">Scanner</span>
+        </button>
+        <button class="nav-tab" id="tab-saved" onclick="showView('saved')">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span class="nav-label">Saved</span>
+        </button>
+    </nav>
+
 </body>
 </html>
