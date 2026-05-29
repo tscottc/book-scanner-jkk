@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Book Scanner</title>
+    <title>Book Junior</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -122,6 +122,38 @@
             margin-top: 16px;
             text-align: left;
             line-height: 1.45;
+        }
+        .btn-guest {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; padding: 13px 20px;
+            background: transparent;
+            border: 1.5px solid var(--border);
+            border-radius: var(--r-sm);
+            font-size: 14px; font-weight: 600;
+            cursor: pointer; color: var(--text-2);
+            font-family: inherit;
+            transition: all 0.15s ease;
+            letter-spacing: -0.1px;
+            margin-top: 10px;
+        }
+        .btn-guest:hover { background: var(--border-light); color: var(--text-1); }
+        .btn-guest:active { transform: scale(0.98); }
+        .guest-limit-card {
+            background: #FFFBEB;
+            border: 1.5px solid #FCD34D;
+            border-radius: var(--r-md);
+            padding: 24px 20px;
+            margin-bottom: 16px;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+        }
+        .guest-limit-title {
+            font-size: 16px; font-weight: 700;
+            color: #92400E; margin-bottom: 8px;
+        }
+        .guest-limit-body {
+            font-size: 14px; color: #78350F;
+            line-height: 1.55; margin-bottom: 16px;
         }
 
         /* ============================
@@ -767,8 +799,8 @@
                     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zm0 0A2.5 2.5 0 0 0 6.5 22H20v-3H6.5A2.5 2.5 0 0 1 4 19.5z"/>
                 </svg>
             </div>
-            <h2>Library Scanner</h2>
-            <p>Sign in with your Midwest Attic account to continue.</p>
+            <h2>Book Junior.</h2>
+            <p>Sign in with your existing Google account to continue. No sign up necessary.</p>
             <button class="btn-google" onclick="signInWithGoogle()">
                 <svg width="17" height="17" viewBox="0 0 18 18">
                     <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
@@ -778,6 +810,7 @@
                 </svg>
                 Continue with Google
             </button>
+            <button class="btn-guest" onclick="loginAsGuest()">Login as Guest</button>
             <div id="login-error" style="display:none;"></div>
         </div>
     </div>
@@ -789,7 +822,7 @@
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zm0 0A2.5 2.5 0 0 0 6.5 22H20v-3H6.5A2.5 2.5 0 0 1 4 19.5z"/>
             </svg>
         </div>
-        <span class="header-title">Book Scanner</span>
+        <span class="header-title">Book Junior</span>
         <div class="header-user">
             <span id="user-info"></span>
             <button class="btn-signout" onclick="doSignOut()">Sign out</button>
@@ -884,7 +917,7 @@
         <div class="saved-scroll">
             <div class="saved-toolbar">
                 <div class="saved-title">Saved Books</div>
-                <button class="btn btn-primary btn-sm" onclick="openManualAdd()">+ Add</button>
+                <button id="btn-add-book" class="btn btn-primary btn-sm" onclick="openManualAdd()">+ Add</button>
             </div>
             <div id="saved-books-list">
                 <div class="empty-state">
@@ -969,6 +1002,7 @@
         const auth = firebase.auth();
         const db   = firebase.firestore();
         let currentUser = null;
+        let isGuest     = false;
 
         // ===================================
         // Cloud Function URLs
@@ -983,6 +1017,10 @@
         // ===================================
         auth.onAuthStateChanged(async user => {
             if (user) {
+                // Anonymous users must explicitly click "Login as Guest" each visit —
+                // keep the login overlay visible; loginAsGuest() handles the transition.
+                if (user.isAnonymous) return;
+
                 console.log('AUTH: user signed in:', user.email);
                 // Check allowlist before granting access
                 try {
@@ -1004,10 +1042,13 @@
                     el.style.display = 'block';
                     return;
                 }
+                isGuest = false;
                 currentUser = user;
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('user-info').textContent = user.email;
+                document.getElementById('btn-add-book').style.display = '';
             } else {
+                isGuest = false;
                 currentUser = null;
                 document.getElementById('login-overlay').style.display = 'flex';
             }
@@ -1024,7 +1065,25 @@
             });
         }
 
+        function loginAsGuest() {
+            document.getElementById('login-error').style.display = 'none';
+            auth.signInAnonymously().then(result => {
+                isGuest = true;
+                currentUser = result.user;
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('user-info').textContent = 'Guest';
+                document.getElementById('btn-add-book').style.display = 'none';
+            }).catch(err => {
+                console.error('GUEST LOGIN ERROR:', err.code, err.message);
+                const el = document.getElementById('login-error');
+                el.textContent = 'Unable to sign in as guest. Please try again.';
+                el.style.display = 'block';
+            });
+        }
+
         function doSignOut() {
+            isGuest = false;
+            currentUser = null;
             auth.signOut();
         }
 
@@ -1214,7 +1273,15 @@
                         body: JSON.stringify({imageBase64, mimeType})
                     }, 30000);
                     const data = await response.json();
-                    if (!response.ok || !data.title) {
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            showGuestLimitInResults(data.error || 'Guest scan limit reached. Sign in with Google for unlimited access.');
+                            return;
+                        }
+                        showError('Could not identify book from cover. Try a clearer photo or use Manual Search.');
+                        return;
+                    }
+                    if (!data.title) {
                         showError('Could not identify book from cover. Try a clearer photo or use Manual Search.');
                         return;
                     }
@@ -1531,6 +1598,10 @@
                         }
                     }
                 } catch (e) {
+                    if (e && e.isGuestLimit) {
+                        showGuestLimitInResults(e.message);
+                        return;
+                    }
                     console.warn('AI classification failed for web results:', e);
                     const aiSection = document.getElementById('web-ai-section');
                     if (aiSection) aiSection.style.display = 'none';
@@ -1617,7 +1688,7 @@
                         ${currentBook.description.length > 150 ? '<button class="expand-btn" onclick="toggleDescription()">Show more ▼</button>' : ''}
                     </div>
                     <div class="result-actions">
-                        <button class="btn btn-primary btn-full" onclick="openSaveModal()">Save to Library</button>
+                        ${!isGuest ? '<button class="btn btn-primary btn-full" onclick="openSaveModal()">Save to Library</button>' : ''}
                         <a href="${amazonUrl}" target="_blank" class="amazon-link">💲 Check price on Amazon</a>
                     </div>
                 </div>
@@ -1654,7 +1725,11 @@
                         `;
                     }
                 })
-                .catch(() => {
+                .catch(err => {
+                    if (err && err.isGuestLimit) {
+                        showGuestLimitInResults(err.message);
+                        return;
+                    }
                     const locSection = document.getElementById('locations-section');
                     if (!locSection) return;
                     locSection.innerHTML = `
@@ -1809,10 +1884,11 @@
                     </div>
                     ${data.notes ? `<div class="saved-book-notes">📝 ${escapeHtml(data.notes)}</div>` : ''}
                     <div class="saved-book-meta" style="font-size:11px;">Saved by ${escapeHtml(data.savedBy || '')}</div>
+                    ${!isGuest ? `
                     <div class="saved-book-actions">
                         <button class="btn btn-secondary btn-sm" onclick="editSavedBook('${id}')">✏️ Edit</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteSavedBook('${id}')">🗑️ Delete</button>
-                    </div>
+                    </div>` : ''}
                 </div>
             `;
         }
@@ -1912,6 +1988,11 @@
             }, 30000);
             if (!response.ok) {
                 const errorData = await response.json();
+                if (response.status === 429) {
+                    const err = new Error(errorData.error || 'Guest scan limit reached. Sign in with Google for unlimited access.');
+                    err.isGuestLimit = true;
+                    throw err;
+                }
                 if (errorData.useFallback) return null;
                 throw new Error(`Cloud Function error: ${errorData.message || response.statusText}`);
             }
@@ -1927,6 +2008,25 @@
         // ===================================
         // UI Helpers
         // ===================================
+        function showGuestLimitInResults(message) {
+            hideStatus();
+            document.getElementById('results').innerHTML = `
+                <div class="guest-limit-card">
+                    <div class="guest-limit-title">Daily scan limit reached</div>
+                    <div class="guest-limit-body">${escapeHtml(message)}</div>
+                    <button class="btn-google" onclick="signInWithGoogle()">
+                        <svg width="17" height="17" viewBox="0 0 18 18">
+                            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                            <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/>
+                            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 6.294C4.672 4.169 6.656 3.58 9 3.58z"/>
+                        </svg>
+                        Sign in with Google
+                    </button>
+                </div>
+            `;
+        }
+
         function toggleDescription() {
             const desc = document.getElementById('description');
             const btn  = event.target;

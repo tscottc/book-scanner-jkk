@@ -1,6 +1,6 @@
-# Book Scanner JKK
+# Book Junior
 
-A web-based library inventory management system for the Midwest Attic library. Staff can scan a book's barcode, photograph its cover, or search by title to instantly look up metadata and automatically classify the book to its correct shelf location using AI.
+A web-based library inventory tool for the Midwest Attic library. Scan a book's barcode, photograph its cover, or search by title to instantly look up metadata and classify it to the correct shelf location using AI.
 
 **Live URL:** https://book-scanner-jkk.web.app
 
@@ -16,7 +16,23 @@ A web-based library inventory management system for the Midwest Attic library. S
 
 The interface is mobile-first: three large scan-mode tiles on the main screen, AI shelf location in large text as the first result, and secondary actions (save, details, notes) in slide-up bottom sheets.
 
-Access is restricted to authorized staff via Google OAuth + a Firestore allowlist.
+---
+
+## Access Levels
+
+### Named users (staff)
+Sign in with a Google account that has been added to the `allowedUsers` Firestore collection. Full access: scan, classify, save, edit, and delete books.
+
+### Guest users
+Click **Login as Guest** on the login screen. No account required. Firebase anonymous auth is used — the same anonymous UID persists across visits (stored in browser localStorage), which allows the rate limit to carry over correctly between sessions.
+
+Guest permissions:
+- Can use all three scan modes and receive full AI classification results
+- Can view the saved books list (read-only)
+- Cannot save, edit, or delete books
+- Limited to **5 scans per 24-hour period** (enforced server-side)
+
+When a guest hits the scan limit, a prompt to sign in with Google appears in place of the result.
 
 ---
 
@@ -26,7 +42,7 @@ Access is restricted to authorized staff via Google OAuth + a Firestore allowlis
 Browser (SPA)
     │
     ├─── Google Books API ──────────────────────► book metadata
-    ├─── Open Library API (fallback)  ──────────► book metadata
+    ├─── Open Library API (fallback) ───────────► book metadata
     │
     └─── Firebase Cloud Functions (backend)
              │
@@ -34,8 +50,8 @@ Browser (SPA)
              └─── Serper API ─────────────────── ► web search fallback
 
 Firebase Hosting  ─── serves index.html (SPA)
-Firebase Auth     ─── Google OAuth login
-Firestore         ─── savedBooks + allowedUsers collections
+Firebase Auth     ─── Google OAuth + anonymous auth
+Firestore         ─── savedBooks, allowedUsers, guestScans collections
 Firebase Secrets  ─── API keys for Gemini & Serper
 ```
 
@@ -50,7 +66,7 @@ All sensitive API keys live in Firebase Secrets Manager — the frontend only ho
 | Frontend | Vanilla HTML/CSS/JS (single `index.html`) |
 | Barcode scanning | `html5-qrcode` + `quagga2` |
 | CSV parsing | `papaparse` (library directory) |
-| Authentication | Firebase Auth (Google OAuth) |
+| Authentication | Firebase Auth (Google OAuth + anonymous) |
 | Database | Firestore (NoSQL) |
 | Backend | Firebase Cloud Functions v2 (Node.js 22) |
 | AI | Google Gemini 2.5-flash |
@@ -105,9 +121,9 @@ Response: { "title": "...", "author": "..." }
 
 ### `webSearch` — Serper fallback
 
-**POST** `https://us-central1-book-scanner-jkk.cloudfunctions.net/webSearch`
+**POST** `https://websearch-pom3tqjr6a-uc.a.run.app`
 
-Proxies a query to Serper and returns the top 5 organic results. Used when neither Google Books nor Open Library can find a book.
+Proxies a query to Serper and returns the top 5 organic results. Used when neither Google Books nor Open Library can find a book. Not subject to guest rate limiting (called internally as a metadata fallback, not a direct scan action).
 
 ```json
 Request:  { "query": "The Great Gatsby book" }
@@ -116,11 +132,15 @@ Response: { "results": [{ "title": "...", "snippet": "...", "link": "..." }] }
 
 All three functions require a Firebase ID token in the `Authorization: Bearer <token>` header.
 
+#### Guest rate limiting
+
+`getBookTopic` and `identifyBookCover` enforce a limit of 5 scans per 24 hours for anonymous users. The counter is stored in Firestore at `guestScans/{uid}` with a `count` integer and a `windowStart` timestamp. The check runs inside a Firestore transaction to prevent race conditions. Exceeding the limit returns HTTP 429.
+
 ---
 
 ## Library Directory (CSV)
 
-`public/Directory VSN. 1.A - Master (All Floors).csv` is the master shelf map. It is loaded client-side at startup and drives both the subject dropdown and the keyword-matching fallback.
+`public/Directory VSN. 1.A - Master (All Floors).csv` is the master shelf map. It is loaded client-side at startup and drives both the subject dropdown and the AI classification subject list.
 
 | Column | Description |
 |--------|------------|
@@ -130,7 +150,7 @@ All three functions require a Firebase ID token in the `Authorization: Bearer <t
 | `ROOM/DESCRIPTION` | Physical location descriptor |
 | `KEYWORDS` | Comma-separated words used for text matching |
 
-When the CSV is updated (new subjects, reorganized shelves), just replace the file and redeploy hosting — no code changes needed.
+To update shelf locations: replace the CSV file and run `firebase deploy --only hosting`. No code changes needed.
 
 ---
 
@@ -145,7 +165,13 @@ notes, source, savedBy, savedAt (server timestamp), updatedAt (server timestamp)
 `source` is one of: `isbn_scan`, `cover_scan`, `book_search`, `web_search`, `manual`
 
 **`allowedUsers/{email}`**
-Presence of the document grants access. The frontend reads the user's own document after login; no document = access denied.
+Presence of the document grants named-user access. The frontend reads the user's own document after login; no document = access denied. Document ID is the user's Google email address.
+
+**`guestScans/{uid}`**
+```
+count (integer), windowStart (Timestamp)
+```
+One document per anonymous UID. Written by Cloud Functions via the Admin SDK (bypasses security rules). Resets automatically when `windowStart` is more than 24 hours old.
 
 ---
 
@@ -219,7 +245,7 @@ firebase functions:secrets:set SERPER_API_KEY
 ### Deploy
 
 ```bash
-# Full deploy (hosting + functions)
+# Full deploy (hosting + functions + Firestore rules)
 firebase deploy
 
 # Hosting only (after CSV or index.html changes)
@@ -227,6 +253,9 @@ firebase deploy --only hosting
 
 # Functions only
 firebase deploy --only functions
+
+# Firestore rules only
+firebase deploy --only firestore
 ```
 
 ### Local development
@@ -242,10 +271,15 @@ npm run shell     # Interactive Cloud Function testing shell
 
 ## Security
 
-- **Authentication**: Firebase Auth with Google OAuth; only addresses in `allowedUsers` can proceed
+- **Authentication**: Firebase Auth with Google OAuth (named users) or anonymous auth (guests)
+- **Named user allowlist**: Only email addresses present in `allowedUsers` can write to the library
+- **Guest rate limiting**: Anonymous users are limited to 5 scans/24h, enforced in Cloud Functions via Firestore transaction
 - **Authorization header**: All Cloud Functions verify Firebase ID tokens before executing
 - **CORS**: Cloud Functions only accept requests from `book-scanner-jkk.web.app` and `book-scanner-jkk.firebaseapp.com`
-- **Firestore rules**: Authenticated users can read/write `savedBooks`; `allowedUsers` is read-only for the matching email
+- **Firestore rules**:
+  - `savedBooks`: named users have full read/write; guests (anonymous) have read-only access
+  - `allowedUsers`: read-only for the matching email; no client writes
+  - `guestScans`: read/write only for the matching anonymous UID
 - **Security headers** (via `firebase.json`):
   - `Strict-Transport-Security` (HSTS, 1 year)
   - `Content-Security-Policy` (restricts scripts, styles, connect sources to known domains)
@@ -263,8 +297,6 @@ Open the Firebase console → Firestore → `allowedUsers` collection → add a 
 
 ## Troubleshooting
 
-An on-screen **debug panel** (bottom of the page, collapsible) shows a timestamped log of every API call, fallback attempt, and error in real time. Check it first when a lookup fails.
-
 | Symptom | Likely cause |
 |---------|-------------|
 | "Your account is not authorized" | Email not in `allowedUsers` |
@@ -273,6 +305,7 @@ An on-screen **debug panel** (bottom of the page, collapsible) shows a timestamp
 | AI classification slow or failing | Gemini quota; keyword matching takes over automatically |
 | Cover scan returns wrong book | Image quality too low; try a clearer, straight-on photo |
 | "Image exceeds 5 MB" | Compress the photo before uploading |
+| Guest sees "Daily scan limit reached" | 5-scan/24h guest limit exceeded; sign in with Google for unlimited access |
 
 For persistent Cloud Function errors:
 
@@ -284,8 +317,6 @@ firebase functions:log
 
 ## Environment / Constants Reference
 
-These values are set directly in `public/index.html` and `functions/index.js`:
-
 | Constant | Location | Default | Purpose |
 |----------|----------|---------|---------|
 | `USE_AI_CLASSIFICATION` | index.html | `true` | Enable/disable Gemini classification |
@@ -294,3 +325,4 @@ These values are set directly in `public/index.html` and `functions/index.js`:
 | `MAX_RETRIES` | functions/index.js | `2` | Gemini retry attempts |
 | `TIMEOUT_MS` | functions/index.js | `15000` | Gemini timeout (ms) |
 | `MAX_IMAGE_BYTES` | functions/index.js | `5242880` | Cover image size limit (5 MB) |
+| `MAX_SCANS` | functions/index.js | `5` | Guest scan limit per 24-hour window |

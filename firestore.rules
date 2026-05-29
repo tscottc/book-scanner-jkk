@@ -8,6 +8,12 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email));
     }
 
+    // Returns true for anonymous Firebase auth users
+    function isAnonymous() {
+      return request.auth != null
+          && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
     // allowedUsers — managed from the Firebase Console only.
     // Each document ID is the user's email address.
     // Users can read their own doc (so the app can check access),
@@ -18,12 +24,19 @@ service cloud.firestore {
     }
 
     // savedBooks — shared library visible to all allowed users.
-    // Any allowed user can create a record, but only allowed users
-    // can read, update, or delete.
+    // Anonymous (guest) users may read but not write.
     match /savedBooks/{docId} {
-      allow read:             if isAllowed();
-      allow create:           if isAllowed();
-      allow update, delete:   if isAllowed();
+      allow read:           if isAllowed() || isAnonymous();
+      allow create:         if isAllowed();
+      allow update, delete: if isAllowed();
+    }
+
+    // guestScans — rate-limit counters for anonymous users.
+    // Each document ID is the anonymous UID.
+    // Writes happen server-side (Admin SDK), but allow client reads/writes
+    // for the user's own document as specified.
+    match /guestScans/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
     // Deny everything else by default

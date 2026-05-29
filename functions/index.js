@@ -103,6 +103,53 @@ function validateRequestBody(body) {
 }
 
 /**
+ * Checks and enforces the guest scan rate limit (5 scans per 24 hours).
+ * Increments the counter atomically inside a Firestore transaction.
+ * Throws a 429-coded error when the limit is exceeded.
+ * @param {string} uid - The anonymous user's Firebase UID
+ */
+async function checkGuestScanLimit(uid) {
+  const db = admin.firestore();
+  const ref = db.collection("guestScans").doc(uid);
+  const WINDOW_MS = 24 * 60 * 60 * 1000;
+  const MAX_SCANS = 5;
+
+  await db.runTransaction(async (t) => {
+    const doc = await t.get(ref);
+    const now = Date.now();
+
+    if (!doc.exists) {
+      t.set(ref, {
+        count: 1,
+        windowStart: admin.firestore.Timestamp.fromMillis(now),
+      });
+      return;
+    }
+
+    const data = doc.data();
+    const windowStart = data.windowStart.toMillis();
+
+    if (now - windowStart > WINDOW_MS) {
+      t.set(ref, {
+        count: 1,
+        windowStart: admin.firestore.Timestamp.fromMillis(now),
+      });
+      return;
+    }
+
+    if (data.count >= MAX_SCANS) {
+      const err = new Error(
+          "Guest scan limit reached. Sign in with Google for unlimited access.",
+      );
+      err.statusCode = 429;
+      throw err;
+    }
+
+    t.update(ref, {count: admin.firestore.FieldValue.increment(1)});
+  });
+}
+
+/**
  * Generates AI prompt for book topic classification
  * @param {string} title - The book title
  * @param {string} description - The book description
@@ -243,11 +290,25 @@ exports.getBookTopic = onRequest(
     },
     async (req, res) => {
       // Verify Firebase auth token
+      let decodedToken;
       try {
-        await verifyAuth(req);
+        decodedToken = await verifyAuth(req);
       } catch (err) {
         res.status(err.statusCode || 401).json({error: err.message});
         return;
+      }
+
+      // Enforce guest scan rate limit for anonymous users
+      if (
+        decodedToken.firebase &&
+        decodedToken.firebase.sign_in_provider === "anonymous"
+      ) {
+        try {
+          await checkGuestScanLimit(decodedToken.uid);
+        } catch (err) {
+          res.status(err.statusCode || 500).json({error: err.message});
+          return;
+        }
       }
 
       // Get API key from secrets
@@ -407,11 +468,25 @@ exports.identifyBookCover = onRequest(
       secrets: ["GEMINI_API_KEY"],
     },
     async (req, res) => {
+      let decodedToken;
       try {
-        await verifyAuth(req);
+        decodedToken = await verifyAuth(req);
       } catch (err) {
         res.status(err.statusCode || 401).json({error: err.message});
         return;
+      }
+
+      // Enforce guest scan rate limit for anonymous users
+      if (
+        decodedToken.firebase &&
+        decodedToken.firebase.sign_in_provider === "anonymous"
+      ) {
+        try {
+          await checkGuestScanLimit(decodedToken.uid);
+        } catch (err) {
+          res.status(err.statusCode || 500).json({error: err.message});
+          return;
+        }
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
