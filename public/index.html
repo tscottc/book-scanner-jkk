@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-JKT9PR30B0"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-JKT9PR30B0');
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Book Junior</title>
@@ -1067,12 +1076,26 @@
 
         function loginAsGuest() {
             document.getElementById('login-error').style.display = 'none';
+            // On return visits Firebase restores the anonymous session to auth.currentUser
+            // before the user clicks anything.  Use it directly instead of calling
+            // signInAnonymously(), which has an unreliable fast-path in the compat SDK
+            // when a session is already active.
+            if (auth.currentUser && auth.currentUser.isAnonymous) {
+                isGuest = true;
+                currentUser = auth.currentUser;
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('user-info').textContent = 'Guest';
+                document.getElementById('btn-add-book').style.display = 'none';
+                return;
+            }
+            // First visit (or after explicit sign-out): create a new anonymous session.
             auth.signInAnonymously().then(result => {
                 isGuest = true;
                 currentUser = result.user;
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('user-info').textContent = 'Guest';
                 document.getElementById('btn-add-book').style.display = 'none';
+                document.getElementById('login-error').style.display = 'none';
             }).catch(err => {
                 console.error('GUEST LOGIN ERROR:', err.code, err.message);
                 const el = document.getElementById('login-error');
@@ -1690,6 +1713,7 @@
                     <div class="result-actions">
                         ${!isGuest ? '<button class="btn btn-primary btn-full" onclick="openSaveModal()">Save to Library</button>' : ''}
                         <a href="${amazonUrl}" target="_blank" class="amazon-link">💲 Check price on Amazon</a>
+                        <div id="result-flag-area"></div>
                     </div>
                 </div>
             `;
@@ -1704,7 +1728,11 @@
                     if (!locSection) return;
                     if (aiMatch) {
                         console.log('🤖 AI Classification:', aiMatch.subject);
-                        pendingSave.subject = aiMatch.subject;
+                        pendingSave.subject     = aiMatch.subject;
+                        pendingSave.aiSubject   = aiMatch.subject;
+                        pendingSave.aiReasoning = aiMatch.reasoning || '';
+                        const flagArea = document.getElementById('result-flag-area');
+                        if (flagArea) flagArea.innerHTML = `<button class="btn btn-secondary btn-sm btn-full" style="color:var(--text-3);font-size:12px;margin-top:2px;" onclick="flagResult()">🚩 Flag AI result</button>`;
                         const shelfLine = `Floor ${aiMatch.floor}${aiMatch.aisle ? ' · Aisle ' + aiMatch.aisle : ''}${aiMatch.room ? ' · ' + aiMatch.room : ''}`;
                         locSection.innerHTML = `
                             <div class="location-card">
@@ -2008,6 +2036,32 @@
         // ===================================
         // UI Helpers
         // ===================================
+        async function flagResult() {
+            if (!currentUser || !pendingSave || !pendingSave.aiSubject) return;
+            const btn = document.querySelector('#result-flag-area button');
+            if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+            try {
+                await db.collection('flaggedScans').add({
+                    title:       pendingSave.title || '',
+                    author:      pendingSave.author || '',
+                    isbn:        pendingSave.isbn || '',
+                    description: pendingSave.description || '',
+                    aiSubject:   pendingSave.aiSubject || '',
+                    aiReasoning: pendingSave.aiReasoning || '',
+                    source:      pendingSave.source || '',
+                    userType:    isGuest ? 'guest' : 'named',
+                    flaggedBy:   isGuest ? currentUser.uid : (currentUser.email || currentUser.uid),
+                    flaggedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                if (btn) btn.textContent = '✓ Flagged — thanks!';
+            } catch (err) {
+                console.error('Flag error:', err);
+                if (btn) { btn.disabled = false; btn.textContent = '🚩 Flag AI result'; }
+                showStatus('Could not submit flag. Please try again.');
+                setTimeout(hideStatus, 2000);
+            }
+        }
+
         function showGuestLimitInResults(message) {
             hideStatus();
             document.getElementById('results').innerHTML = `
@@ -2068,7 +2122,7 @@
 
     <!-- Bottom Nav -->
     <nav class="bottom-nav">
-        <a href="https://admin.midwestattic.com" class="nav-tab">
+        <a href="https://admin-dashboard-3.web.app/" class="nav-tab">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                 <polyline points="9 22 9 12 15 12 15 22"/>

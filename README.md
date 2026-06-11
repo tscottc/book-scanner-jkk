@@ -23,6 +23,8 @@ The interface is mobile-first: three large scan-mode tiles on the main screen, A
 ### Named users (staff)
 Sign in with a Google account that has been added to the `allowedUsers` Firestore collection. Full access: scan, classify, save, edit, and delete books.
 
+The bottom navigation bar includes an **Employee** button that links to the admin dashboard at https://admin-dashboard-3.web.app/.
+
 ### Guest users
 Click **Login as Guest** on the login screen. No account required. Firebase anonymous auth is used — the same anonymous UID persists across visits (stored in browser localStorage), which allows the rate limit to carry over correctly between sessions.
 
